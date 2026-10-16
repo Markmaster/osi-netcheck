@@ -142,8 +142,18 @@ function Invoke-Osi([string]$Gateway = '') {
     Say (Pick $dnsExt 'OK' 'FAIL') '4 ' 'DNS via 1.1.1.1 (UDP 53, bypassing Control D)'
 
     # 5 Control D directly over UDP 53
-    $cdDns = (@(Resolve-A 'example.com' '76.76.2.0').Count -gt 0)
-    Say (Pick $cdDns 'OK' 'FAIL') '5 ' 'Control D directly 76.76.2.0 (UDP 53)'
+    # Only Control D answers verify.controld.com with 147.185.34.1: any other answer = the network intercepts DNS.
+    $cdIps = @(Resolve-A 'verify.controld.com' '76.76.2.0')
+    $cdDns = ($cdIps -contains $script:VerifyIp)
+    $hijack = $false
+    if ($cdDns) {
+        Say 'OK' '5 ' 'Control D directly 76.76.2.0 (UDP 53)'
+    } elseif ($cdIps.Count -gt 0 -or @(Resolve-A 'example.com' '76.76.2.0').Count -gt 0) {
+        $hijack = $true
+        Say '??' '5 ' 'Control D directly 76.76.2.0: answered, but not by Control D (network intercepts DNS)'
+    } else {
+        Say 'FAIL' '5 ' 'Control D directly 76.76.2.0 (UDP 53)'
+    }
 
     # 5b Control D DoH endpoint over TCP 443
     $cdDoh = [bool](Test-Tcp '76.76.2.22' 443)
@@ -234,7 +244,8 @@ function Invoke-Osi([string]$Gateway = '') {
     if ($web -and -not $pingOk) { Note 'This network blocks ping, but the internet works. Not a fault.' }
     if ($web -and $gwOk -eq 0) { Note 'The router did not answer ping, but the internet works: the router just ignores ping.' }
     if ($web -and -not $dnsExt -and $sysDns) { Note 'This network blocks outside DNS (UDP 53), but the system DNS works.' }
-    if ($web -and -not $cdDns -and $cdDoh -and $sysDns) { Note 'Control D is unreachable on UDP 53 but reachable on 443: normal for DoH.' }
+    if ($web -and $hijack) { Note 'This network intercepts plain DNS (5): Control D on a router cannot work from here (DoH is checked separately in 5b).' }
+    if ($web -and -not $cdDns -and -not $hijack -and $cdDoh -and $sysDns) { Note 'Control D is unreachable on UDP 53 but reachable on 443: normal for DoH.' }
     if ($web -and $nd -and -not $netDns -and $sysDns) { Note "The adapter DNS ($nd) does not answer, but the system DNS works." }
     Write-Host 'Final check in a browser: https://controld.com/status'
     if ($web -and $sysDns -and $verifySys -eq 1) { Note 'If this says OK but the status page says "Not using": the browser may use its own Secure DNS (DoH) or another path (VPN, proxy extension). Check its Secure DNS setting first.' }

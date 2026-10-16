@@ -61,9 +61,15 @@ BEGIN {
     dns_ext = dig_ok("dig @1.1.1.1 example.com +short +time=2 +tries=1")
     say(dns_ext ? "OK" : "FAIL", "4 ", "DNS via 1.1.1.1 (UDP 53, bypassing Control D)")
 
-    # 5 Control D directly over UDP 53
-    cd_dns = dig_ok("dig @76.76.2.0 example.com +short +time=2 +tries=1")
-    say(cd_dns ? "OK" : "FAIL", "5 ", "Control D directly 76.76.2.0 (UDP 53)")
+    # 5 Control D directly over UDP 53. Only Control D answers verify.controld.com with 147.185.34.1,
+    # so any other answer means the network intercepts plain DNS (hijack) and Control D never saw it.
+    rc = run("dig @76.76.2.0 verify.controld.com +short +time=2 +tries=1")
+    if (NOFILE) cd_dns = (rc == 0)
+    else cd_dns = (rc == 0 && has("^147\\.185\\.34\\.1$"))
+    hijack = (!cd_dns && rc == 0)
+    if (cd_dns) say("OK", "5 ", "Control D directly 76.76.2.0 (UDP 53)")
+    else if (hijack) say("??", "5 ", "Control D directly 76.76.2.0: answered, but not by Control D (network intercepts DNS)")
+    else say("FAIL", "5 ", "Control D directly 76.76.2.0 (UDP 53)")
 
     # 5b Control D DoH endpoint over TCP 443
     cd_doh = (run("nc -z -G 3 76.76.2.22 443") == 0)
@@ -251,7 +257,8 @@ function verdict(    inet, web) {
     if (web && !ping_ok) note("This network blocks ping, but the internet works. Not a fault.")
     if (web && gw_ok == 0) note("The router did not answer ping, but the internet works: the router just ignores ping.")
     if (web && !dns_ext && sys_dns) note("This network blocks outside DNS (UDP 53), but the system DNS works.")
-    if (web && !cd_dns && cd_doh && sys_dns) note("Control D is unreachable on UDP 53 but reachable on 443: normal for DoH (profile or ctrld).")
+    if (web && hijack) note("This network intercepts plain DNS (5): Control D on a router cannot work from here (DoH is checked separately in 5b).")
+    if (web && !cd_dns && !hijack && cd_doh && sys_dns) note("Control D is unreachable on UDP 53 but reachable on 443: normal for DoH (profile or ctrld).")
     if (web && !net_dns && sys_dns) {
         if (NETLBL == "network") {
             note("The network/router DNS does not answer (6b). At home without a VPN this means the router DNS")

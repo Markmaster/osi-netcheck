@@ -49,7 +49,7 @@ Blink rules (from the Blink source code):
 | `osi/3-tcp-443` | `nc -zv -G 3 1.1.1.1 443` | TCP 443 by IP |
 | `osi/3b-https` | `curl -sS -m 5 -o /dev/null -w "%{http_code}\n" https://1.1.1.1` | HTTPS by IP |
 | `osi/4-dns-bypass` | `dig @1.1.1.1 example.com +short +time=2 +tries=1` | DNS bypassing Control D |
-| `osi/5-dns-controld` | `dig @76.76.2.0 example.com +short +time=2 +tries=1` | Control D directly, without the profile |
+| `osi/5-dns-controld` | `dig @76.76.2.0 verify.controld.com +short +time=2 +tries=1` | Control D directly over UDP 53, without the profile; also catches DNS interception |
 | `osi/5b-controld-doh` | `nc -zv -G 3 76.76.2.22 443` | TCP 443 to the Control D DoH endpoint |
 | `osi/6-dns-system` | `ping -c 1 -W 2000 example.com` | iPhone system DNS (the PING line) |
 | `osi/6b-dns-network` | `dig example.com +short +time=2 +tries=1` | Network or router DNS, bypassing the profile |

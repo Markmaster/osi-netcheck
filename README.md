@@ -45,7 +45,7 @@ The first failing step is the answer: everything above it fails as a consequence
 | 2 | Ping 1.1.1.1 / 8.8.8.8 by IP | Internet or ISP (or only ICMP is blocked) |
 | 3 / 3b | TCP 443 and HTTPS to 1.1.1.1 | Firewall, captive portal, TLS interception |
 | 4 | DNS straight to 1.1.1.1 | The network blocks outside DNS |
-| 5 / 5b | Control D directly: UDP 53 and the DoH endpoint on 443 | The network blocks Control D |
+| 5 / 5b | Control D directly: UDP 53 and the DoH endpoint on 443 | The network blocks or intercepts Control D |
 | 6 / 6b | System DNS, and the network/router DNS | Your setup: profile, ctrld, router, VPN |
 | 7 / 7b | `verify.controld.com` = Control D's own IP | 7: DNS works but bypasses Control D. 7b only shows whether the router uses Control D (empty is normal) |
 

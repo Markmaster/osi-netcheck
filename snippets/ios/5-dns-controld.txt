@@ -1,1 +1,1 @@
-dig @76.76.2.0 example.com +short +time=2 +tries=1
+dig @76.76.2.0 verify.controld.com +short +time=2 +tries=1

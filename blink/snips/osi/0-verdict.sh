@@ -9,6 +9,7 @@
 # 4  DNS @1.1.1.1 FAIL while 3 works -> the network blocks outside DNS (UDP 53).
 # 5  Control D on UDP 53 FAIL while 4 works -> the network blocks Control D plain DNS
 #    (matters for Control D on a router; a DoH profile does not use it).
+#    Answer without 147.185.34.1 -> the network intercepts DNS (same effect for a router).
 # 5b TCP 443 to Control D DoH FAIL -> the iPhone DNS profile cannot reach Control D.
 # 6  System DNS (the PING line) cannot resolve while 5b works -> your setup.
 # 7  Verify is not 147.185.34.1 while 6 works -> DNS most likely bypasses Control D:

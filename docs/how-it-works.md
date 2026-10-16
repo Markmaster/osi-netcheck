@@ -15,7 +15,7 @@ The checks go up the stack, like the OSI model. Every step depends only on the s
 | 3 | L4 | TCP connect to 1.1.1.1:443 | The network blocks outbound TCP 443 (firewall) |
 | 3b | L5-L7 | HTTPS request to https://1.1.1.1 | TCP works but TLS does not: captive portal or TLS interception |
 | 4 | L7 DNS | DNS query straight to 1.1.1.1 (UDP 53) | The network blocks outside DNS |
-| 5 | L7 DNS | DNS query straight to Control D, 76.76.2.0 (UDP 53) | The network blocks Control D specifically |
+| 5 | L7 DNS | `verify.controld.com` straight to Control D, 76.76.2.0 (UDP 53) | The network blocks Control D plain DNS. An answer without `147.185.34.1` means the network intercepts DNS |
 | 5b | L4 | TCP connect to the Control D DoH endpoint, 76.76.2.22:443 | A DoH profile has nowhere to go: the network blocks Control D |
 | 6 | L7 DNS | Resolve a name through the **system** resolver | Your setup: profile, `ctrld`, router DNS, VPN |
 | 6b | L7 DNS | Resolve a name through the **network/router** DNS directly | The router DNS is broken (other devices are affected too) |
@@ -27,7 +27,7 @@ Why some choices:
 - **TCP 443 before DNS.** Steps 2-3 use bare IP addresses, so they work without any DNS. If they pass, the internet is there, and whatever breaks later is DNS.
 - **Ping alone proves nothing.** Plenty of networks drop ICMP. That is why "internet works" is any outside probe answering: ping, TCP 443, HTTPS, Control D or plain DNS. Some networks block 1.1.1.1 but let Control D through, and the script handles that too.
 - **HTTPS separately from TCP.** A captive portal accepts the TCP connection and then breaks TLS. TCP OK + HTTPS FAIL is its signature.
-- **Step 5 vs 5b.** A router usually talks to Control D over plain DNS (UDP 53, step 5). A phone profile uses DoH over TCP 443 (step 5b). They can fail independently: UDP 53 to Control D blocked while 443 works is normal on many networks and does not hurt a DoH profile.
+- **Step 5 vs 5b.** A router usually talks to Control D over plain DNS (UDP 53, step 5). A phone profile uses DoH over TCP 443 (step 5b). They can fail independently: UDP 53 to Control D blocked while 443 works is normal on many networks and does not hurt a DoH profile. Step 5 asks for `verify.controld.com` rather than a normal name: some networks intercept plain DNS and answer it themselves, and only Control D answers this name with `147.185.34.1`, so an intercepted query shows up as `[  ??]` instead of a false OK.
 - **verify.controld.com.** Control D resolvers answer this name with `147.185.34.1` (CNAME `api.controld.com`). Other public resolvers return an empty answer (checked against Cloudflare and Google). Per the Control D docs, the expected answer is evidence that this DNS path reaches Control D, and a missing answer alone does not tell another resolver apart from a DNS or verify-service failure. That is why the script also resolves a normal domain (step 6) and says "most likely" in that verdict.
 
 ## Two DNS paths on iOS
@@ -76,8 +76,8 @@ Before any check the script makes sure it can actually write and read back a tem
 
 ## Testing
 
-- **iPhone:** each command was run by hand in Blink v18.7.1 at home and on another network, and several snips were sent from the snips menu. An earlier version of `osi.awk` ran end to end once on a real network (the all-OK case). The current version and the failure verdicts (no internet, captive portal, broken setup, Control D blocked) were checked only with fake commands.
-- **Logic:** fake `ping`, `nc`, `curl`, `dig` and `route` commands, driven by environment variables, simulate each network state. The awk script was run against 1536 combinations of probe results on three awks: BWK awk, mawk and the exact build Blink ships (version 20200816), with identical output on all three. The checks: every run finishes with all 11 steps, step 7b fails only when the network DNS is dead, and no note contradicts a no-internet, firewall or captive-portal verdict. Named scenarios cover a profile-only iPhone, DoH blocked, ctrld on a Mac, a VPN default route and more.
+- **iPhone:** each command was run by hand in Blink v18.7.1 at home and on another network (including `dig @76.76.2.0 verify.controld.com`, which returns `147.185.34.1`), and several snips were sent from the snips menu. An earlier version of `osi.awk` ran end to end once on a real network (the all-OK case). The current version and the failure verdicts (no internet, captive portal, broken setup, Control D blocked) were checked only with fake commands.
+- **Logic:** fake `ping`, `nc`, `curl`, `dig` and `route` commands, driven by environment variables, simulate each network state. The awk script was run against 2304 combinations of probe results (including DNS interception) on three awks: BWK awk, mawk and the exact build Blink ships (version 20200816), with identical output on all three. The checks: every run finishes with all 11 steps, step 7b fails only when the network DNS is dead, and no note contradicts a no-internet, firewall or captive-portal verdict. Named scenarios cover a profile-only iPhone, DoH blocked, DNS interception, ctrld on a Mac, a VPN default route and more.
 - **PowerShell:** the probe functions were mocked and the verdict checked on PowerShell 7. Windows PowerShell 5.1 compatibility was checked with PSScriptAnalyzer.
 - **Not yet:** a real run on macOS and Windows hardware.
 

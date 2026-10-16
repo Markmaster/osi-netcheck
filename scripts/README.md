@@ -51,7 +51,7 @@ Final check in a browser: https://controld.com/status
 | 3 | TCP 443 to 1.1.1.1 | `nc -z -G 3` | `TcpClient`, 3 s |
 | 3b | HTTPS to 1.1.1.1 | `curl -m 5` | `curl.exe -m 5 --ssl-no-revoke` |
 | 4 | DNS via 1.1.1.1 | `dig @1.1.1.1` | `Resolve-DnsName -Server 1.1.1.1` |
-| 5 | Control D over UDP 53 | `dig @76.76.2.0` | `Resolve-DnsName -Server 76.76.2.0` |
+| 5 | Control D over UDP 53 (catches DNS interception) | `dig @76.76.2.0 verify.controld.com` | `Resolve-DnsName verify.controld.com -Server 76.76.2.0` |
 | 5b | Control D DoH, TCP 443 | `nc -z -G 3 76.76.2.22 443` | `TcpClient` to 76.76.2.22:443 |
 | 6 | System DNS | `ping` by name (the `PING` line) | `Resolve-DnsName` without `-Server` (DNS client with NRPT) |
 | 6b | Network DNS | `dig` without `@` | `Resolve-DnsName` against the adapter DNS |
