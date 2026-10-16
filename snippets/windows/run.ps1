@@ -1,0 +1,1 @@
+powershell -ExecutionPolicy Bypass -File "$HOME\osi.ps1"
