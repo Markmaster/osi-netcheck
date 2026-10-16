@@ -20,7 +20,7 @@ The checks go up the stack, like the OSI model. Every step depends only on the s
 | 6 | L7 DNS | Resolve a name through the **system** resolver | Your setup: profile, `ctrld`, router DNS, VPN |
 | 6b | L7 DNS | Resolve a name through the **network/router** DNS directly | The router DNS is broken (other devices are affected too) |
 | 7 | L7 DNS | `verify.controld.com` through the system resolver | DNS works but does not go through Control D |
-| 7b | L7 DNS | `verify.controld.com` through the network DNS | Only tells you whether the router itself uses Control D |
+| 7b | L7 DNS | `verify.controld.com` through the network DNS | Only tells you whether the router itself uses Control D (an empty answer is normal otherwise) |
 
 Why some choices:
 
@@ -28,18 +28,18 @@ Why some choices:
 - **Ping alone proves nothing.** Plenty of networks drop ICMP. That is why "internet works" is any outside probe answering: ping, TCP 443, HTTPS, Control D or plain DNS. Some networks block 1.1.1.1 but let Control D through, and the script handles that too.
 - **HTTPS separately from TCP.** A captive portal accepts the TCP connection and then breaks TLS. TCP OK + HTTPS FAIL is its signature.
 - **Step 5 vs 5b.** A router usually talks to Control D over plain DNS (UDP 53, step 5). A phone profile uses DoH over TCP 443 (step 5b). They can fail independently: UDP 53 to Control D blocked while 443 works is normal on many networks and does not hurt a DoH profile.
-- **verify.controld.com.** Control D answers this name with its own address, `147.185.34.1` (CNAME `api.controld.com`), only when the query reached Control D. Any other answer means some other resolver answered. Per the Control D docs this is strong evidence but not 100%: the verify service itself can fail, so the script always checks a normal domain next to it.
+- **verify.controld.com.** Control D resolvers answer this name with `147.185.34.1` (CNAME `api.controld.com`). Other public resolvers return an empty answer (checked against Cloudflare and Google). Per the Control D docs, the expected answer is evidence that this DNS path reaches Control D, and a missing answer alone does not tell another resolver apart from a DNS or verify-service failure. That is why the script also resolves a normal domain (step 6) and says "most likely" in that verdict.
 
 ## Two DNS paths on iOS
 
 This was the non-obvious part, and it was confirmed on a real iPhone.
 
-- `dig`, `nslookup` and `host` in Blink are built from BIND. iOS has no `/etc/resolv.conf`, so they ask the system for the DNS server list and send it **plain UDP 53**. They cannot do DoH or DoT, so they **do not see** a DoH DNS profile. `dig` without `@` asks the network/router DNS directly.
+- `dig`, `nslookup` and `host` in Blink are built from BIND. iOS has no `/etc/resolv.conf`, so they ask the system for the DNS server list and send it **plain UDP 53**. They cannot do DoH or DoT, so they **do not see** a DoH DNS profile. `dig` without `@` asks the DNS servers iOS lists for the current connection directly: the router's, or a VPN's when a VPN is on.
 - `ping example.com` resolves the name through the system resolver (`gethostbyname2`), the same path apps use, and prints `PING name (IP)`. The IP in that line is what the system resolver returned, even if no ping reply ever comes.
 
-So steps 6 and 7 use `ping` by name (the phone's real DNS path), and 6b/7b use `dig` without `@` (the network's DNS). Proof from an iPhone on a network without Control D on the router: `ping verify.controld.com` printed `147.185.34.1` (the DNS profile works), while `dig verify.controld.com` returned something else (the network's own DNS).
+So steps 6 and 7 use `ping` by name (the phone's real DNS path), and 6b/7b use `dig` without `@` (the network's DNS). Proof from an iPhone on a network without Control D on the router: `ping verify.controld.com` printed `147.185.34.1` (the DNS profile works), while `dig verify.controld.com` returned no Control D address (the network's own DNS).
 
-Packet loss in steps 6 and 7 does not matter, only the name resolution does. The awk script tells "cannot resolve" apart from "no reply" by ping's exit code: `68` means the name did not resolve, `2` means no reply.
+Packet loss in steps 6 and 7 does not matter, only the name resolution does. The awk script decides by the `PING name (IP)` line, which ping prints only after the name has resolved. Ping's exit code (`68` = the name did not resolve, `2` = no reply) is used only as a fallback when the output cannot be read back.
 
 ## Why awk
 
@@ -51,7 +51,7 @@ But Blink ships `awk` (BWK "one true awk", version 20200816), and awk is a full 
 2. awk reads the output back with `getline`, looks for patterns (`PING name (IP)`, `prohibited by filter`, an IPv4 in `dig +short` output) and combines them with the exit codes.
 3. The verdict is a chain of rules over those results, in the bottom-up order above.
 
-One command, `awk -f osi.awk`, fits into a single Blink snip. The same file runs unchanged in macOS Terminal (macOS also ships BWK awk). On a Mac it also finds the gateway via `route -n get default`, detects a VPN default route, labels a `ctrld` local resolver from `/etc/resolv.conf`, and stops cleanly on Ctrl-C (on macOS `system()` makes awk ignore SIGINT, so the script checks the exit status for a signal itself).
+One command, `awk -f osi.awk`, fits into a single Blink snip. The same file runs unchanged in macOS Terminal (macOS also ships BWK awk). On a Mac it also finds the gateway via `route -n get default`, detects a VPN default route, labels a `ctrld` local resolver from `/etc/resolv.conf`, and stops on Ctrl-C (on macOS `system()` makes awk ignore SIGINT, so the script checks the exit status for a signal itself). `ping` catches Ctrl-C and exits normally, so a Ctrl-C during a ping step only ends that step: press it again at the next one.
 
 Before any check the script makes sure it can actually write and read back a temp file (`$HOME`, then `$TMPDIR`, then the current folder). If it cannot, it stops instead of guessing.
 
@@ -62,7 +62,7 @@ Before any check the script makes sure it can actually write and read back a tem
 - Ping: `ping.exe`, a reply is `TTL=` in the output (the same in localized Windows).
 - TCP: `System.Net.Sockets.TcpClient` with a 3 s timeout.
 - HTTPS: `curl.exe` (built into Windows 10 1803+) with `--ssl-no-revoke`. Without it, Schannel checks certificate revocation through the system DNS, and with broken DNS the HTTPS step fails falsely and looks like a captive portal.
-- DNS: `Resolve-DnsName`. Without `-Server` it goes through the Windows DNS client and NRPT, the same as apps. Per the Control D docs, `nslookup.exe` bypasses NRPT and gives wrong answers with `ctrld` in DNS Intercept Mode.
+- DNS: `Resolve-DnsName`. Without `-Server` it goes through the Windows DNS client and NRPT, the same as apps. Per the Control D docs, `nslookup.exe` bypasses the DNS Client and NRPT, so it does not show what apps get when `ctrld` runs in DNS Intercept Mode.
 - Gateway and adapter DNS: `Get-NetRoute` and `Get-DnsClientServerAddress`.
 
 ## What it cannot tell
@@ -70,12 +70,14 @@ Before any check the script makes sure it can actually write and read back a tem
 - It checks IPv4 only.
 - It checks the DoH endpoint at the TCP level (connect to 443), not a full DoH query.
 - A browser can have its own Secure DNS (DoH) and bypass the system resolver. The script checks the system path; https://controld.com/status checks the browser path. Run both.
+- `verify.controld.com` shows that a Control D resolver answered, not which one: Free DNS, and a router on Legacy DNS whose IP is not authorized, return `147.185.34.1` too. With your own profile, check the Resolver row on https://controld.com/status (N/A is expected only for Free DNS).
+- On a Mac running `ctrld --intercept-mode dns`, pf redirects every port-53 query to ctrld and `/etc/resolv.conf` stays unchanged. Steps 4, 5, 6b and 7b then do not bypass Control D and the ctrld label is not shown. To test the network itself, run the script with ctrld stopped.
 - On iOS there is no way to read the gateway from Blink (`route` and `netstat` are not available), so the router IP is asked for or the step is skipped.
 
 ## Testing
 
-- **iPhone:** each command was run by hand in Blink v18.7.1, several snips were sent from the snips menu, and `osi.awk` ran end to end at home and on another network.
-- **Logic:** fake `ping`, `nc`, `curl`, `dig` and `route` commands, driven by environment variables, simulate each network state. The awk script was run against 768 combinations of probe results on two awk implementations (BWK awk and mawk). This English version prints the same step statuses and the same number of verdict and note lines as the original (Russian) version in all of them.
+- **iPhone:** each command was run by hand in Blink v18.7.1 at home and on another network, and several snips were sent from the snips menu. An earlier version of `osi.awk` ran end to end once on a real network (the all-OK case). The current version and the failure verdicts (no internet, captive portal, broken setup, Control D blocked) were checked only with fake commands.
+- **Logic:** fake `ping`, `nc`, `curl`, `dig` and `route` commands, driven by environment variables, simulate each network state. The awk script was run against 1536 combinations of probe results on three awks: BWK awk, mawk and the exact build Blink ships (version 20200816), with identical output on all three. The checks: every run finishes with all 11 steps, step 7b fails only when the network DNS is dead, and no note contradicts a no-internet, firewall or captive-portal verdict. Named scenarios cover a profile-only iPhone, DoH blocked, ctrld on a Mac, a VPN default route and more.
 - **PowerShell:** the probe functions were mocked and the verdict checked on PowerShell 7. Windows PowerShell 5.1 compatibility was checked with PSScriptAnalyzer.
 - **Not yet:** a real run on macOS and Windows hardware.
 

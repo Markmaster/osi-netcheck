@@ -4,6 +4,8 @@
 
 These snips are for the Blink local shell (`blink>`), before you connect to any server. Each snip sends exactly one command.
 
+Needs Blink 18.6.0 or later: in 18.5.x snips did nothing at the local `blink>` prompt ([blinksh/blink#2241](https://github.com/blinksh/blink/issues/2241)). Tested on v18.7.1.
+
 Two modes:
 - **Auto:** `osi/run` (or `osi/run-wifi`, which also checks the router) runs `scripts/osi.awk`. It runs every check in turn, prints `[  OK]`, `[FAIL]`, `[  --]` (skipped or not an error) or `[  ??]` (could not tell) for each, and ends with a verdict.
 - **Manual:** `osi/1-gateway` ... `osi/7b-verify-network`, one command each. Use them when you want the full output of one check.
@@ -14,7 +16,7 @@ GitHub -> **Code -> Download ZIP**. You need two folders: `blink/snips/osi` and 
 
 ## 2. Put them into Blink
 
-1. Files app -> **iCloud Drive > Blink > snips**. This is the folder Blink reads: Settings -> Snips -> Default Location = iCloud Drive -> "Open in Files.app".
+1. Files app -> **iCloud Drive > Blink > snips**. This is the folder Blink reads: Settings -> Snips -> Default Location = iCloud Drive -> "Open in Files.app". This needs iCloud Drive turned on for Blink; if it is off, Settings -> Snips says "iCloud is disabled on this device" and `osi/run` cannot find `~/iCloud/scripts/osi.awk`.
 2. Copy the whole `osi` folder there. You get `snips/osi/1-gateway.sh` and so on.
 3. Put the `scripts` folder (with `osi.awk`) one level up, into **iCloud Drive > Blink**, next to `snips`, not inside it. You get `Blink/scripts/osi.awk`, which is `~/iCloud/scripts/osi.awk` inside Blink. If `scripts` ends up inside `snips`, `osi/run` prints `awk: can't open file` and the script shows up in the list as a snip called `scripts/osi`.
 4. If the files show a cloud icon, they are not downloaded yet: long-press the folder -> **Download Now**. Blink does not show files that are not downloaded.

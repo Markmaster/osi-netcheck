@@ -97,8 +97,10 @@ BEGIN {
     verify_net = has("^147\\.185\\.34\\.1$")
     if (NOFILE) say("??", "7b", "Verify (" NETLBL "): output not readable")
     else if (verify_net) say("OK", "7b", "Verify (" NETLBL "): Control D")
-    else if (rc != 0 || !has("^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$")) say("FAIL", "7b", "Verify (" NETLBL "): DNS did not answer")
-    else say("--", "7b", "Verify (" NETLBL "): not Control D" (NETLBL == "network" ? " (normal away from home)" : ""))
+    # Resolvers other than Control D return an empty answer for this name (dig exit 0, no IP):
+    # that is "not Control D", not a dead DNS. Dead = dig failed, or no IP while 6b got no answer either.
+    else if (rc != 0 || (!net_dns && !has("^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$"))) say("FAIL", "7b", "Verify (" NETLBL "): DNS did not answer")
+    else say("--", "7b", "Verify (" NETLBL "): not Control D" (NETLBL == "network" ? " (normal unless your router uses Control D)" : ""))
 
     verdict()
     system("rm -f " OUT)
@@ -206,7 +208,7 @@ function verdict(    inet, web) {
         print "Control D is not the cause."
         if (gw_ok == 0) print "The router does not reply: Wi-Fi or router problem."
         else if (gw_ok == 1) print "The router replies, nothing beyond it: ISP or router settings."
-        else print "Check Wi-Fi, cable or router, or switch to another network (LTE)."
+        else print "Check Wi-Fi, cable or router, or switch to another network (e.g. cellular)."
     } else if (!tcp_ok && !https_ok && !cd_doh) {
         print "Something outside answers, but TCP 443 is blocked everywhere: the network blocks HTTPS (firewall)."
         print "Control D is not the cause."
@@ -221,17 +223,22 @@ function verdict(    inet, web) {
             print "Check: turn Control D off (DNS profile or ctrld) and run again."
         } else if (cd_dns || dns_ext) {
             print "Internet works, but TCP 443 to Control D (DoH) is blocked:"
-            print "the DNS profile (DoH) cannot reach it. The network blocks Control D:"
-            print "exclude this network in the profile or use another network (LTE)."
+            print "a DNS profile or ctrld (DoH) cannot reach it. The network blocks Control D:"
+            print "exclude this network in the profile (Control D dashboard) or use another network."
             if (cd_dns) print "If Control D runs on your router (UDP 53), check the router too."
+        } else if (net_dns && NETLBL == "network") {
+            print "Internet works, but the network blocks Control D and all outside DNS:"
+            print "only its own DNS answers (6b). A DNS profile or ctrld cannot work here:"
+            print "exclude this network in the profile (Control D dashboard) or use another network."
         } else {
             print "The network blocks both outside DNS and Control D. System DNS does not work."
-            print "Control D is not the cause: try LTE."
+            print "Control D is not the cause: try another network (e.g. cellular)."
         }
     } else if (verify_sys == 0) {
         web = 1
-        print "Internet and DNS work, but the system DNS does NOT go through Control D."
-        print "Usual causes: VPN, iCloud Private Relay, manual DNS, network excluded in the profile."
+        print "Internet and DNS work, but the system DNS most likely does NOT go through Control D."
+        print "Usual causes: VPN, manual DNS, ctrld not running, network excluded in the profile,"
+        print "iCloud Private Relay if you allowed it in Control D."
     } else if (verify_sys == -1) {
         web = 1
         print "Internet and DNS work. Could not tell whether DNS goes through Control D."
@@ -243,12 +250,14 @@ function verdict(    inet, web) {
     if (web && !tcp_ok && !https_ok) note("1.1.1.1 is blocked on this network, but the internet works (Control D answers on 443).")
     if (web && !ping_ok) note("This network blocks ping, but the internet works. Not a fault.")
     if (web && gw_ok == 0) note("The router did not answer ping, but the internet works: the router just ignores ping.")
-    if (!dns_ext && sys_dns) note("This network blocks outside DNS (UDP 53), but the system DNS works.")
-    if (!cd_dns && cd_doh && sys_dns) note("Control D is unreachable on UDP 53 but reachable on 443: normal for a DoH profile.")
-    if (!net_dns && sys_dns) {
-        note("The network/router DNS does not answer (6b). At home this means the router DNS is broken")
-        note("and other devices on the network have no DNS. If you just switched networks,")
-        note("fully close Blink and start it again: dig may still use the previous network's DNS.")
+    if (web && !dns_ext && sys_dns) note("This network blocks outside DNS (UDP 53), but the system DNS works.")
+    if (web && !cd_dns && cd_doh && sys_dns) note("Control D is unreachable on UDP 53 but reachable on 443: normal for DoH (profile or ctrld).")
+    if (web && !net_dns && sys_dns) {
+        if (NETLBL == "network") {
+            note("The network/router DNS does not answer (6b). At home without a VPN this means the router DNS")
+            note("is broken and other devices on the network have no DNS. In Blink, if you just switched")
+            note("networks, fully close Blink and start it again: dig may still use the previous network's DNS.")
+        } else note("The " NETLBL " does not answer dig (6b), but the system DNS works.")
     }
     print "Final check in a browser: https://controld.com/status"
 }

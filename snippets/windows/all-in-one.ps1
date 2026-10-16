@@ -12,8 +12,8 @@ ping -n 3 8.8.8.8
 "== 3. TCP 443 and TLS by IP =="
 "TCP 1.1.1.1:443 = $(Test-NetConnection 1.1.1.1 -Port 443 -InformationLevel Quiet)"
 "TCP 8.8.8.8:443 = $(Test-NetConnection 8.8.8.8 -Port 443 -InformationLevel Quiet)"
-curl.exe -sS -m 5 -o NUL -w "HTTPS 1.1.1.1: %{http_code}\n" https://1.1.1.1
-"True and a code other than 000 = outbound TCP and TLS work. False = the network blocks TCP 443 (firewall, captive portal)."
+curl.exe -sS -m 5 --ssl-no-revoke -o NUL -w "HTTPS 1.1.1.1: %{http_code}\n" https://1.1.1.1
+"True and a code other than 000 = outbound TCP and TLS work. False = the network blocks TCP 443 (firewall, captive portal). True but 000 = captive portal or TLS interception."
 ""
 "== 4. DNS bypassing Control D =="
 Resolve-DnsName example.com -Server 1.1.1.1 -Type A -DnsOnly
@@ -24,7 +24,7 @@ Resolve-DnsName example.com -Server 8.8.8.8 -Type A -DnsOnly
 Resolve-DnsName example.com -Server 76.76.2.0 -Type A -DnsOnly
 Resolve-DnsName example.com -Server 76.76.10.0 -Type A -DnsOnly
 "TCP 76.76.2.22:443 (DoH dns.controld.com) = $(Test-NetConnection 76.76.2.22 -Port 443 -InformationLevel Quiet)"
-"IPAddress and True = Control D is reachable from this network. Step 4 OK but error or False here = the network blocks Control D."
+"IPAddress and True = Control D is reachable from this network. Step 4 OK but Resolve-DnsName error here = the network blocks Control D on UDP 53 (matters for Control D on a router). False = ctrld (DoH) cannot reach Control D."
 ""
 "== 6. System DNS (your setup) =="
 Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $_.ServerAddresses } | Format-Table InterfaceAlias, ServerAddresses -AutoSize

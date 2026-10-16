@@ -180,8 +180,10 @@ function Invoke-Osi([string]$Gateway = '') {
     if ($nd) {
         $vn = @(Resolve-A 'verify.controld.com' $nd)
         if ($vn -contains $script:VerifyIp) { Say 'OK' '7b' 'Verify (adapter): Control D' }
-        elseif ($vn.Count -eq 0) { Say 'FAIL' '7b' 'Verify (adapter): adapter DNS did not answer' }
-        else { Say '--' '7b' 'Verify (adapter): not Control D (can be normal with ctrld or away from home)' }
+        # Resolvers other than Control D return an empty answer for this name: that is "not Control D".
+        # Dead DNS = 6b got no answer either.
+        elseif ($vn.Count -eq 0 -and -not $netDns) { Say 'FAIL' '7b' 'Verify (adapter): adapter DNS did not answer' }
+        else { Say '--' '7b' 'Verify (adapter): not Control D (normal unless your router uses Control D)' }
     }
 
     # ---------- Verdict ----------
@@ -211,13 +213,17 @@ function Invoke-Osi([string]$Gateway = '') {
             Write-Host 'Internet works, but TCP 443 to Control D (DoH) is blocked:'
             Write-Host 'the network blocks Control D. Use another network or plain DNS.'
             if ($cdDns) { Write-Host 'If Control D runs on your router (UDP 53), check the router too.' }
+        } elseif ($nd -and $netDns -and $nd -notmatch '^127\.') {
+            Write-Host 'Internet works, but the network blocks Control D and all outside DNS:'
+            Write-Host 'only its own DNS answers (6b). ctrld cannot work here:'
+            Write-Host 'stop ctrld (or set the adapter DNS back to automatic) on this network, or use another network.'
         } else {
             Write-Host 'The network blocks both outside DNS and Control D. System DNS does not work.'
             Write-Host 'Control D is not the cause: try another network.'
         }
     } elseif ($verifySys -eq 0) {
         $web = $true
-        Write-Host 'Internet and DNS work, but the system DNS does NOT go through Control D.'
+        Write-Host 'Internet and DNS work, but the system DNS most likely does NOT go through Control D.'
         Write-Host 'Usual causes: VPN, manual adapter DNS, ctrld not running or disabled.'
     } else {
         $web = $true
@@ -227,11 +233,11 @@ function Invoke-Osi([string]$Gateway = '') {
     if ($web -and -not $tcpOk -and -not $httpsOk) { Note '1.1.1.1 is blocked on this network, but the internet works (Control D answers on 443).' }
     if ($web -and -not $pingOk) { Note 'This network blocks ping, but the internet works. Not a fault.' }
     if ($web -and $gwOk -eq 0) { Note 'The router did not answer ping, but the internet works: the router just ignores ping.' }
-    if (-not $dnsExt -and $sysDns) { Note 'This network blocks outside DNS (UDP 53), but the system DNS works.' }
-    if (-not $cdDns -and $cdDoh -and $sysDns) { Note 'Control D is unreachable on UDP 53 but reachable on 443: normal for DoH.' }
-    if ($nd -and -not $netDns -and $sysDns) { Note "The adapter DNS ($nd) does not answer, but the system DNS works." }
+    if ($web -and -not $dnsExt -and $sysDns) { Note 'This network blocks outside DNS (UDP 53), but the system DNS works.' }
+    if ($web -and -not $cdDns -and $cdDoh -and $sysDns) { Note 'Control D is unreachable on UDP 53 but reachable on 443: normal for DoH.' }
+    if ($web -and $nd -and -not $netDns -and $sysDns) { Note "The adapter DNS ($nd) does not answer, but the system DNS works." }
     Write-Host 'Final check in a browser: https://controld.com/status'
-    if ($verifySys -eq 1) { Note 'If this says OK but the browser status page says "Not using": the browser has its own Secure DNS (DoH) on.' }
+    if ($web -and $sysDns -and $verifySys -eq 1) { Note 'If this says OK but the status page says "Not using": the browser may use its own Secure DNS (DoH) or another path (VPN, proxy extension). Check its Secure DNS setting first.' }
 }
 
 if (-not $NoRun) { Invoke-Osi -Gateway $Gateway }

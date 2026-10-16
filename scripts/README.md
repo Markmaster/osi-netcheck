@@ -16,7 +16,7 @@ One command runs steps 1-7b, prints `[  OK]`/`[FAIL]` for each, and ends with wh
 - **Windows:** download `osi.ps1` as a file (GitHub -> Raw -> Save as, or Code -> Download ZIP) and put it into your user folder (`C:\Users\<name>\osi.ps1`). Paste the command into a **PowerShell** window: only PowerShell expands `$HOME`. From cmd: `powershell -ExecutionPolicy Bypass -File "%USERPROFILE%\osi.ps1"`.
 - `-ExecutionPolicy Bypass` is needed because Windows clients do not run `.ps1` files at all by default (policy Restricted). It applies to this one run and does not change the system policy. On a work PC, Group Policy can still block it.
 
-Set the gateway by hand: `awk -v gw=IP -f ~/osi.awk` or `osi.ps1 -Gateway IP`.
+Set the gateway by hand: `awk -v gw=IP -f ~/osi.awk` on a Mac, `powershell -ExecutionPolicy Bypass -File "$HOME\osi.ps1" -Gateway IP` on Windows.
 
 ## Example output
 
@@ -32,7 +32,7 @@ Set the gateway by hand: `awk -v gw=IP -f ~/osi.awk` or `osi.ps1 -Gateway IP`.
 [  OK] 6  System DNS: example.com -> 104.20.23.154
 [  OK] 6b Network/router DNS (bypasses the profile)
 [  OK] 7  Verify (system): 147.185.34.1 = Control D
-[  --] 7b Verify (network): not Control D (normal away from home)
+[  --] 7b Verify (network): not Control D (normal unless your router uses Control D)
 
 == VERDICT ==
 ALL OK: internet works, DNS goes through Control D.
@@ -61,7 +61,7 @@ The verdict logic is the same in both scripts. Why each step is there: [`docs/ho
 
 ## What has been tested
 
-- `osi.awk` in Blink on an iPhone: ran end to end on a real network.
-- `osi.awk` on macOS and `osi.ps1` on Windows have not been run on real devices yet. The logic was run against fake commands: awk on BWK awk (the one Blink and macOS ship) and mawk, PowerShell on PowerShell 7 with the network functions mocked. Windows PowerShell 5.1 compatibility of `osi.ps1` was checked with PSScriptAnalyzer.
+- `osi.awk` in Blink on an iPhone: an earlier version ran end to end once on a real network (the all-OK case). The current version and the failure verdicts were checked only with fake commands.
+- `osi.awk` on macOS and `osi.ps1` on Windows have not been run on real devices yet. The logic was run against fake commands: awk on BWK awk, mawk and the exact awk build Blink ships, PowerShell on PowerShell 7 with the network functions mocked. Windows PowerShell 5.1 compatibility of `osi.ps1` was checked with PSScriptAnalyzer.
 
 If you run it on a Mac or a Windows PC, an issue with the output is welcome.

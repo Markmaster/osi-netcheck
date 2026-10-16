@@ -5,8 +5,8 @@
 ```
 == VERDICT ==
 Internet works, but TCP 443 to Control D (DoH) is blocked:
-the DNS profile (DoH) cannot reach it. The network blocks Control D:
-exclude this network in the profile or use another network (LTE).
+a DNS profile or ctrld (DoH) cannot reach it. The network blocks Control D:
+exclude this network in the profile (Control D dashboard) or use another network.
 ```
 
 Three ways to use it:
@@ -21,7 +21,7 @@ No install, no dependencies, nothing changed on the system: only ping, TCP conne
 
 ## Quick start
 
-**iPhone/iPad (Blink Shell):** download the repo (Code -> Download ZIP), put `blink/snips/osi` into **iCloud Drive > Blink > snips** and `scripts` into **iCloud Drive > Blink**. In Blink: `⌘` + `<` -> `osi/run` -> ➤ -> Enter.
+**iPhone/iPad (Blink Shell 18.6.0+, iCloud Drive on):** download the repo (Code -> Download ZIP), put `blink/snips/osi` into **iCloud Drive > Blink > snips** and `scripts` into **iCloud Drive > Blink**. In Blink: `⌘` + `<` -> `osi/run` -> ➤ -> Enter.
 
 **macOS:** save `scripts/osi.awk` as `~/osi.awk`, then in Terminal:
 
@@ -47,7 +47,7 @@ The first failing step is the answer: everything above it fails as a consequence
 | 4 | DNS straight to 1.1.1.1 | The network blocks outside DNS |
 | 5 / 5b | Control D directly: UDP 53 and the DoH endpoint on 443 | The network blocks Control D |
 | 6 / 6b | System DNS, and the network/router DNS | Your setup: profile, ctrld, router, VPN |
-| 7 / 7b | `verify.controld.com` = Control D's own IP | DNS works but bypasses Control D |
+| 7 / 7b | `verify.controld.com` = Control D's own IP | 7: DNS works but bypasses Control D. 7b only shows whether the router uses Control D (empty is normal) |
 
 Why this order, why `ping` instead of `dig` on iOS, and why the logic is written in awk: [`docs/how-it-works.md`](docs/how-it-works.md).
 
@@ -57,7 +57,7 @@ Steps 1-4 and 6/6b work with any DNS setup. Steps 5 and 7 are Control D specific
 
 ## Status
 
-- Blink Shell on iPhone: tested on real networks (Blink v18.7.1).
+- Blink Shell on iPhone: every command and several snips tested on real networks (Blink v18.7.1). An earlier `osi.awk` ran end to end once on a real network; the current verdict logic is tested only in simulation.
 - macOS and Windows: the logic is tested against simulated network states, not yet on real machines. Reports welcome.
 
 Not affiliated with Control D or Blink Shell.

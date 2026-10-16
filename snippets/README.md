@@ -15,14 +15,14 @@ The Description column is the "how to read the result" hint. Put it into your ma
 | `ni1` | `iOS 1 · Gateway` | `ios/1-gateway.txt` | `ping -c 3 ROUTER_IP` | Gateway. Replies = Wi-Fi and router OK. 100% loss = Wi-Fi or router. Before Enter replace ROUTER_IP with the router address: Settings > Wi-Fi > (i) > Router. Skip on LTE |
 | `ni2` | `iOS 2 · Ping by IP` | `ios/2-ping-ip.txt` | `ping -c 3 1.1.1.1` | Internet by IP, no DNS. Replies = the internet works. 100% loss = internet or ISP. "prohibited by filter" or ni3/ni3b OK = the network blocks ping, the internet works |
 | `ni3` | `iOS 3 · TCP 443` | `ios/3-tcp-443.txt` | `nc -zv -G 3 1.1.1.1 443` | TCP 443 by IP. succeeded = outbound TCP works. Error or timed out = the network blocks TCP 443. Total silence = the command did not start, paste again |
-| `ni3b` | `iOS 3b · HTTPS` | `ios/3b-https.txt` | `curl -sS -m 5 -o /dev/null -w "%{http_code}\n" https://1.1.1.1` | HTTPS by IP. 301 or 200 = TLS gets through. 000 or a curl error = HTTPS is blocked |
+| `ni3b` | `iOS 3b · HTTPS` | `ios/3b-https.txt` | `curl -sS -m 5 -o /dev/null -w "%{http_code}\n" https://1.1.1.1` | HTTPS by IP. 301 or 200 = TLS gets through. 000 or a curl error while ni3 succeeds = captive portal or TLS interception |
 | `ni4` | `iOS 4 · DNS bypassing Control D` | `ios/4-dns-bypass.txt` | `dig @1.1.1.1 example.com +short +time=2 +tries=1` | DNS bypassing Control D. An IP = outside DNS works. timed out = the network blocks UDP 53 |
-| `ni5` | `iOS 5 · Control D directly` | `ios/5-dns-controld.txt` | `dig @76.76.2.0 example.com +short +time=2 +tries=1` | Control D directly, without the profile. An IP = Control D is reachable. ni4 OK but timed out here = the network blocks Control D |
+| `ni5` | `iOS 5 · Control D directly` | `ios/5-dns-controld.txt` | `dig @76.76.2.0 example.com +short +time=2 +tries=1` | Control D directly, without the profile. An IP = Control D is reachable. ni4 OK but timed out here = the network blocks Control D plain DNS (matters for Control D on a router; a DoH profile uses ni5b) |
 | `ni5b` | `iOS 5b · Control D DoH` | `ios/5b-controld-doh.txt` | `nc -zv -G 3 76.76.2.22 443` | Control D DoH endpoint (dns.controld.com = 76.76.2.22, port 443). succeeded = TCP 443 to Control D gets through |
 | `ni6` | `iOS 6 · System DNS` | `ios/6-dns-system.txt` | `ping -c 1 -W 2000 example.com` | iPhone system DNS, same as apps use. Look at the "PING name (IP)" line. cannot resolve = your DNS setup is broken. Packet loss does not matter |
-| `ni6b` | `iOS 6b · Network DNS` | `ios/6b-dns-network.txt` | `dig example.com +short +time=2 +tries=1` | Network or router DNS directly, bypassing the profile. At home that is your router. On another network it is their DNS |
+| `ni6b` | `iOS 6b · Network DNS` | `ios/6b-dns-network.txt` | `dig example.com +short +time=2 +tries=1` | Network or router DNS directly, bypassing the profile. At home that is your router (or your VPN, if one is on). On another network it is their DNS |
 | `ni7` | `iOS 7 · Verify system` | `ios/7-verify-system.txt` | `ping -c 1 -W 2000 verify.controld.com` | Verify via the iPhone system DNS. Expect PING api.controld.com (147.185.34.1). Packet loss does not matter |
-| `ni7b` | `iOS 7b · Verify network` | `ios/7b-verify-network.txt` | `dig verify.controld.com +short +time=2 +tries=1` | Verify via the network DNS. At home with Control D on the router expect api.controld.com and 147.185.34.1. On another network a different answer is normal |
+| `ni7b` | `iOS 7b · Verify network` | `ios/7b-verify-network.txt` | `dig verify.controld.com +short +time=2 +tries=1` | Verify via the network DNS. With Control D on your router expect api.controld.com and 147.185.34.1. Otherwise an empty answer is normal: other resolvers do not answer this name |
 
 Why `ping` for steps 6 and 7: on iOS, `dig` without `@` sends plain UDP 53 to the network DNS and does not see a DoH/DoT DNS profile. `ping` by name uses the system resolver, the same path apps take. Details: [`docs/how-it-works.md`](../docs/how-it-works.md).
 
@@ -44,7 +44,7 @@ Multi-line pastes work in Terminal and PowerShell, so each step is one snippet w
 
 Suggested names: `Mac 6 · System DNS`, `Win 7 · Verify` and so on.
 
-On Windows use `Resolve-DnsName`, not `nslookup.exe`: per the Control D docs, `nslookup` bypasses NRPT, which Control D's DNS Intercept Mode relies on.
+On Windows use `Resolve-DnsName`, not `nslookup.exe`: per the Control D docs, `nslookup.exe` bypasses the DNS Client and NRPT, so it does not show what apps get when `ctrld` runs in DNS Intercept Mode.
 
 ## Cheat sheets
 

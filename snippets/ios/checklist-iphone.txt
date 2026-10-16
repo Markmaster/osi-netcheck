@@ -27,13 +27,15 @@ Go in order. The first failing step is the answer.
 
 -- Is Control D in use? --
 7. Turn Control D back on. Safari -> https://controld.com/status
-   * Using Control D -> all good.
+   * Using Control D -> a Control D resolver answers. With your own profile the Resolver
+     row names it; Resolver = N/A there = IP not authorized (Legacy DNS on the router),
+     your rules are not applied. docs.controld.com/docs/ip-not-authorized
    * Not using Control D -> the profile is not applied or something overrides it (step 9).
    * Unable to verify -> this does NOT mean DNS is broken. If sites open,
      the check is broken, not DNS. docs.controld.com/docs/status-page
 
 -- If your setup is to blame --
-8. Control D dashboard -> Activity Log while you open sites:
+8. Control D dashboard -> Activity Log while you open sites (needs Analytics = Full):
    * Entries appear -> queries arrive, check the profile filters and rules.
    * Empty -> queries do not arrive, see step 9.
      "IP not authorized" only happens with Legacy DNS (IPv4, UDP 53), for example
@@ -41,11 +43,12 @@ Go in order. The first failing step is the answer.
      affected. docs.controld.com/docs/ip-not-authorized
 9. What overrides DNS on an iPhone:
    * Another VPN is on.
-   * This Wi-Fi network is excluded in the profile (Exclude Wi-Fi Networks).
+   * This Wi-Fi network is excluded in the profile (Control D dashboard, profile setup ->
+     Advanced Settings -> Exclude Wi-Fi Networks; the profile is then reinstalled).
    * Wi-Fi -> (i) -> Configure DNS is set to Manual (matters if Control D runs on the router).
    * Two DNS profiles are installed and the wrong one is selected under DNS.
    * iCloud Private Relay: Control D blocks it by default. If you made it bypass that,
-     two resolvers work at once and blocking works only half the time.
+     two resolvers work at once and blocked sites may randomly load.
    * Public Wi-Fi login page does not open -> captive portal.
      The profile has an Exclude common domains option. docs.controld.com/docs/ios-platform
 
