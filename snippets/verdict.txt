@@ -1,0 +1,33 @@
+WHO IS TO BLAME: Control D or the internet
+Steps 1 -> 7 in order. The first failing step is the answer.
+iPhone: ni1 ... ni7b (or Blink snips osi/1 ... osi/7b, auto run osi/run). Mac: nm1 ... nm7. Windows: nw1 ... nw7.
+
+1 Gateway FAIL -> Wi-Fi, cable or router. Not Control D. Skip step 1 on LTE.
+2 Ping by IP FAIL and step 3 FAIL -> internet or ISP is down. Not Control D.
+  Ping FAIL but step 3 OK -> the network just blocks ICMP. The internet works, go on.
+3 TCP 443 FAIL while ping works -> the network blocks TCP 443 (firewall, captive portal).
+  TCP 443 OK but HTTPS FAIL -> captive portal or TLS interception.
+4 DNS @1.1.1.1 FAIL while step 3 works -> the network blocks outside DNS (UDP 53). Not Control D.
+5 Control D on UDP 53 FAIL while step 4 works -> the network blocks Control D plain DNS
+  (matters for Control D on a router; a DoH profile or ctrld does not use it).
+  Answer without 147.185.34.1 -> the network intercepts DNS (same effect for a router).
+5b TCP 443 to Control D FAIL -> a DoH profile or ctrld cannot reach Control D.
+6 System DNS FAIL while step 5b works -> your setup: profile, ctrld, router, VPN.
+7 Verify is not 147.185.34.1 while step 6 works -> DNS most likely bypasses Control D:
+  VPN, manual DNS, ctrld not running, network excluded in the profile,
+  iCloud Private Relay if you allowed it in Control D.
+  Per the Control D docs this sign alone is not 100%: the check itself can fail too.
+All OK but one site does not load -> Activity Log (needs Analytics = Full) and profile rules
+  (it may be blocked).
+
+iPhone, two DNS paths:
+  ni6 / ni7 (ping by name) = the iPhone system resolver, same as apps use
+  (goes through the DNS profile: tested on an iPhone away from home).
+  ni6b / ni7b (dig without @) = the network, router or VPN DNS directly, the profile does not see it.
+  At home both paths show Control D if it runs on the router and as a profile.
+  Without Control D on the router ni7b prints nothing (empty answer), that is normal. Look at ni7.
+
+Final check in a browser: https://controld.com/status
+Using Control D = a Control D resolver answers; with your own profile the Resolver row must name it
+(N/A = IP not authorized, rules not applied). Not using = the profile is not applied or something overrides it.
+Unable to verify does not mean DNS is broken.

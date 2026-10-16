@@ -1,0 +1,59 @@
+iPHONE CHECKLIST: Control D or the internet?
+Go in order. The first failing step is the answer.
+
+-- L1-2: Wi-Fi and router --
+1. Wi-Fi connected, icon shown? No -> reconnect, restart the router. STOP.
+2. Turn Wi-Fi off and stay on cellular. Does the internet work?
+   * Works on LTE, not on Wi-Fi -> the problem is Wi-Fi, the router or its DNS.
+   * Does not work on LTE either -> step 3.
+
+-- L3: internet without DNS --
+3. Safari -> https://1.1.1.1
+   * The Cloudflare page opens -> the internet works by IP.
+   * Does not open -> the internet or ISP is down. NOT Control D. STOP.
+
+-- L7: DNS --
+4. Safari -> https://example.com
+   * Opens -> DNS works. Step 7.
+   * Does not open while step 3 is OK -> DNS is broken. Step 5.
+
+-- Is Control D to blame? --
+5. Turn Control D off for a moment:
+   Settings -> General -> VPN & Device Management -> DNS -> pick something other than Control D
+   (or remove the profile; if you installed it via a VPN-style app, turn that off).
+6. Repeat step 4.
+   * Now it works -> your Control D setup or access to Control D from this network. Step 8.
+   * Still broken -> network, ISP or router. Not Control D.
+
+-- Is Control D in use? --
+7. Turn Control D back on. Safari -> https://controld.com/status
+   * Using Control D -> a Control D resolver answers. With your own profile the Resolver
+     row names it; Resolver = N/A there = IP not authorized (Legacy DNS on the router),
+     your rules are not applied. docs.controld.com/docs/ip-not-authorized
+   * Not using Control D -> the profile is not applied or something overrides it (step 9).
+   * Unable to verify -> this does NOT mean DNS is broken. If sites open,
+     the check is broken, not DNS. docs.controld.com/docs/status-page
+
+-- If your setup is to blame --
+8. Control D dashboard -> Activity Log while you open sites (needs Analytics = Full):
+   * Entries appear -> queries arrive, check the profile filters and rules.
+   * Empty -> queries do not arrive, see step 9.
+     "IP not authorized" only happens with Legacy DNS (IPv4, UDP 53), for example
+     when Control D is set on the router. The iPhone DNS profile (DoH) is not
+     affected. docs.controld.com/docs/ip-not-authorized
+9. What overrides DNS on an iPhone:
+   * Another VPN is on.
+   * This Wi-Fi network is excluded in the profile (Control D dashboard, profile setup ->
+     Advanced Settings -> Exclude Wi-Fi Networks; the profile is then reinstalled).
+   * Wi-Fi -> (i) -> Configure DNS is set to Manual (matters if Control D runs on the router).
+   * Two DNS profiles are installed and the wrong one is selected under DNS.
+   * iCloud Private Relay: Control D blocks it by default. If you made it bypass that,
+     two resolvers work at once and blocked sites may randomly load.
+   * Public Wi-Fi login page does not open -> captive portal.
+     The profile has an Exclude common domains option. docs.controld.com/docs/ios-platform
+
+-- RESULT --
+Failed at 1-3 -> network or internet.
+Failed at 4-6 and it fails without Control D too -> network or ISP.
+Failed at 4-6 but works without Control D -> your Control D setup.
+All OK but Not using -> something overrides the profile (step 9).
