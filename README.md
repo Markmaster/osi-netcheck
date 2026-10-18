@@ -1,71 +1,63 @@
 # osi-netcheck
 
-**Is it my DNS filter (Control D) or the internet?** A bottom-up network check for iPhone/iPad (Blink Shell), macOS and Windows. It runs the checks layer by layer, from the router up to DNS, and tells you which layer broke first.
+Bottom-up network check: is it the DNS filter (Control D) or the network? Runs in Blink Shell (iOS), macOS Terminal and Windows PowerShell. Read-only: ping, TCP connects, DNS queries, one HTTPS request.
 
 ```
+== OSI check: Control D or the internet ==
+[  OK] 1  Gateway 192.0.2.1: replies
+[FAIL] 2  Ping 1.1.1.1 / 8.8.8.8: the network blocks ping (prohibited by filter)
+[  OK] 3  TCP 443 to 1.1.1.1
+[  OK] 3b HTTPS to 1.1.1.1
+[  OK] 4  DNS via 1.1.1.1 (UDP 53, bypassing Control D)
+[  OK] 5  Control D directly 76.76.2.0 (UDP 53)
+[  OK] 5b Control D DoH 76.76.2.22 (TCP 443)
+[  OK] 6  System DNS: example.com -> 104.20.23.154
+[  OK] 6b Network/router DNS (bypasses the profile)
+[  OK] 7  Verify (system): 147.185.34.1 = Control D
+[  --] 7b Verify (network): not Control D (normal unless your router uses Control D)
+
 == VERDICT ==
-Internet works, but TCP 443 to Control D (DoH) is blocked:
-a DNS profile or ctrld (DoH) cannot reach it. The network blocks Control D:
-exclude this network in the profile (Control D dashboard) or use another network.
+ALL OK: internet works, DNS goes through Control D.
+  * This network blocks ping, but the internet works. Not a fault.
+Final check in a browser: https://controld.com/status
 ```
 
-Three ways to use it:
+## Run
 
-| What | Where | How |
+| Platform | Install | Run |
 |---|---|---|
-| **Auto check** with a verdict | Blink Shell (iOS), macOS, Windows | One command: `awk -f osi.awk` or `osi.ps1`. See [`scripts/`](scripts/) |
-| **Blink snips** | Blink Shell on iPhone/iPad | `⌘` + `<` -> `osi/run`, or one step at a time. See [`blink/HOWTO.md`](blink/HOWTO.md) |
-| **Plain-text snippets** | Any snippet manager, any terminal | One step per snippet, with a hint on how to read the result. See [`snippets/`](snippets/) |
+| iOS, Blink 18.6.0+ | `blink/snips/osi` -> iCloud Drive > Blink > snips, `scripts` -> iCloud Drive > Blink ([details](blink/HOWTO.md)) | `⌘<` -> `osi/run` |
+| macOS | `curl -sSLo ~/osi.awk https://raw.githubusercontent.com/Markmaster/osi-netcheck/main/scripts/osi.awk` | `awk -f ~/osi.awk` |
+| Windows | `curl.exe -sSLo "$HOME\osi.ps1" https://raw.githubusercontent.com/Markmaster/osi-netcheck/main/scripts/osi.ps1` | `powershell -ExecutionPolicy Bypass -File "$HOME\osi.ps1"` |
 
-No install, no dependencies, nothing changed on the system: only ping, TCP connects, DNS queries and one HTTPS request to 1.1.1.1.
+- Gateway is auto-detected on macOS and Windows. Override: `-v gw=IP` (awk), `-Gateway IP` (ps1). Blink cannot read routes: use `osi/run-wifi`, which asks for the router IP.
+- macOS 15+: non-Apple terminals may need Local Network access, otherwise step 1 fails falsely.
+- Windows: `Bypass` covers this run only (client default is Restricted). Group Policy can still block it.
 
-## Quick start
+## Steps
 
-**iPhone/iPad (Blink Shell 18.6.0+, iCloud Drive on):** download the repo (Code -> Download ZIP), put `blink/snips/osi` into **iCloud Drive > Blink > snips** and `scripts` into **iCloud Drive > Blink**. In Blink: `⌘` + `<` -> `osi/run` -> ➤ -> Enter.
+First failing step is the answer.
 
-**macOS:** save `scripts/osi.awk` as `~/osi.awk`, then in Terminal:
-
-```sh
-awk -f ~/osi.awk
-```
-
-**Windows:** save `scripts/osi.ps1` as `C:\Users\<name>\osi.ps1`, then in PowerShell:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File "$HOME\osi.ps1"
-```
-
-## The steps
-
-The first failing step is the answer: everything above it fails as a consequence.
-
-| Step | Checks | Fails means |
+| Step | Check | FAIL means |
 |---|---|---|
-| 1 | Gateway (router) | Wi-Fi, cable or router |
-| 2 | Ping 1.1.1.1 / 8.8.8.8 by IP | Internet or ISP (or only ICMP is blocked) |
-| 3 / 3b | TCP 443 and HTTPS to 1.1.1.1 | Firewall, captive portal, TLS interception |
-| 4 | DNS straight to 1.1.1.1 | The network blocks outside DNS |
-| 5 / 5b | Control D directly: UDP 53 and the DoH endpoint on 443 | The network blocks or intercepts Control D |
-| 6 / 6b | System DNS, and the network/router DNS | Your setup: profile, ctrld, router, VPN |
-| 7 / 7b | `verify.controld.com` = Control D's own IP | 7: DNS works but bypasses Control D. 7b only shows whether the router uses Control D (empty is normal) |
+| 1 | Ping gateway | Wi-Fi, cable, router |
+| 2 | Ping 1.1.1.1, 8.8.8.8 | ISP down, or ICMP filtered (step 3 decides) |
+| 3 / 3b | TCP 443, HTTPS to 1.1.1.1 | Firewall; TCP OK + HTTPS FAIL = captive portal or TLS interception |
+| 4 | DNS @1.1.1.1 | Outside DNS blocked |
+| 5 / 5b | `verify.controld.com` @76.76.2.0 (UDP 53), TCP 443 to 76.76.2.22 (DoH) | Control D blocked; `??` on 5 = network intercepts DNS |
+| 6 / 6b | System resolver, network/router DNS | Your setup: profile, ctrld, router, VPN |
+| 7 / 7b | `verify.controld.com` = `147.185.34.1` via system / network DNS | 7: DNS bypasses Control D. 7b: network DNS did not answer (`--` = router not on Control D, normal) |
 
-Why this order, why `ping` instead of `dig` on iOS, and why the logic is written in awk: [`docs/how-it-works.md`](docs/how-it-works.md).
+Steps 1-4 and 6/6b are DNS-agnostic; 5 and 7 are Control D specific.
 
-## Not using Control D?
+## Also here
 
-Steps 1-4 and 6/6b work with any DNS setup. Steps 5 and 7 are Control D specific: to adapt it to another DNS service, change the resolver IPs and the verify name in the script.
+- [`blink/snips/osi`](blink/snips/osi): one snip per step for the Blink local shell.
+- [`snippets/`](snippets/): the same steps as plain text for any snippet manager, plus a cheat sheet and an iPhone checklist.
+- [`docs/how-it-works.md`](docs/how-it-works.md): why this order, why `ping` and not `dig` on iOS, why awk, limits, testing.
 
 ## Status
 
-- Blink Shell on iPhone: every command and several snips tested on real networks (Blink v18.7.1). An earlier `osi.awk` ran end to end once on a real network; the current verdict logic is tested only in simulation.
-- macOS and Windows: the logic is tested against simulated network states, not yet on real machines. Reports welcome.
+iPhone (Blink 18.7.1): every command tested on real networks; an earlier `osi.awk` ran end to end once, the current verdict logic is tested in simulation. macOS and Windows: simulation only. Issues with real output welcome.
 
-Not affiliated with Control D or Blink Shell.
-
-## Credits
-
-Designed and tested by Mark. Implemented with [Claude Code](https://claude.com/claude-code).
-
-## License
-
-[MIT](LICENSE)
+Designed and tested by Mark. Implemented with [Claude Code](https://claude.com/claude-code). MIT. Not affiliated with Control D or Blink Shell.
