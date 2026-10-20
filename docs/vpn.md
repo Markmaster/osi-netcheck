@@ -45,7 +45,7 @@ POSSIBLE, not LIKELY, for your own WireGuard/OpenVPN port: networks that open on
 | Teleport uses WireGuard; works with the gateway and the client behind NAT; needs IPv6 on the gateway WAN in some circumstances | CONFIRMED | UniFi Help Center, "UniFi Gateway - Teleport VPN" |
 | Most VPNs except Teleport need a public IP at home | CONFIRMED | UniFi Help Center, "UniFi Remote Access: VPN and Port Forwarding" |
 | UniFi Identity One-Click VPN = OpenVPN (port 10118, UDP recommended, TCP possible) or WireGuard (51820); the console needs a public IP, not CGNAT 100.64.0.0/10 | CONFIRMED | help.ui.com articles 17167292342295, 17198673056151, 27900437407895 (fetched 2026-10-20) |
-| `dig @1.1.1.1 CH TXT id.server` returns a Cloudflare site code | CONFIRMED (reviewer, Cloudflare 1.1.1.1 troubleshooting docs) | that a hijacking resolver does not return one: HYPOTHESIS |
+| `dig @1.1.1.1 CH TXT id.server` returns a Cloudflare site code | CONFIRMED on an iPhone 2026-10-20: `"sea07"` (the first version expected 3 capitals like `"SJC"` and printed a false HIJACK) | that a hijacking resolver does not return one: HYPOTHESIS |
 | WireGuard runs over UDP only | CONFIRMED | WireGuard protocol design |
 | A TCP or relay fallback for Teleport | UNKNOWN | not documented, so "NO (likely)" when UDP is blocked |
 | UDP to STUN on 3478 and 19302 working means a WireGuard port works too | HYPOTHESIS | a filter can block single ports; the verdict says LIKELY, not YES |

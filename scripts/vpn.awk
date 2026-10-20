@@ -120,11 +120,12 @@ function udp(    a, i, s) {
     U19302 = udp_probe("stun.l.google.com", 19302, "stun-req.bin", "STUN")
     U123 = udp_probe("time.apple.com", 123, "ntp-req.bin", "NTP")
 
-    # UDP 53: only Cloudflare answers id.server (CHAOS TXT) with its 3-letter site code, so
+    # UDP 53: only Cloudflare answers id.server (CHAOS TXT) with its site code ("sea07" on an
+    # iPhone 2026-10-20, "SJC" in older docs: 3 letters, optional digits, any case), so
     # a network that answers DNS itself (hijack) is not counted as "UDP 53 reaches the internet".
     run("dig @1.1.1.1 CH TXT id.server +short +time=2 +tries=1")
     s = ""
-    for (i = 1; i <= NL; i++) if (LINES[i] ~ /^"[A-Z][A-Z][A-Z]"$/) s = LINES[i]
+    for (i = 1; i <= NL; i++) if (LINES[i] ~ /^"[A-Za-z][A-Za-z][A-Za-z][0-9]*"$/) s = LINES[i]
     U53 = (s != "")
     if (U53) row("L4", "UDP 53 DNS to 1.1.1.1", "OK", "Cloudflare answered (" s ")")
     else {
