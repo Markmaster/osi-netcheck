@@ -75,8 +75,10 @@ info() {
 	if [ -n "$WIP" ] && [ "$WIP" = "$PIP" ]; then
 		row L3 "inbound to WAN" OK "WAN IP is the public IP: probes from outside can reach this interface"
 	elif [ -n "$WIP" ] && [ -n "$PIP" ]; then
-		row L3 "inbound to WAN" WARN "WAN $WIP is behind NAT ($PIP): outside probes stop upstream unless forwarded, the capture cannot see them"
+		row L3 "inbound to WAN" WARN "WAN $WIP is behind NAT ($PIP): outside probes stop upstream unless forwarded, the capture cannot see them (Teleport itself works behind NAT per UniFi docs)"
 	fi
+	W6=$(ip -6 -o addr show dev "$IF" scope global 2>/dev/null | awk '{sub(/\/.*/, "", $4); print $4; exit}')
+	if [ -n "$W6" ]; then row L3 "WAN IPv6" OK "$W6"; else row L3 "WAN IPv6" WARN "none: UniFi docs say Teleport needs IPv6 on the gateway WAN in some circumstances"; fi
 
 	if have wg; then
 		ifs=$(wg show interfaces 2>/dev/null)

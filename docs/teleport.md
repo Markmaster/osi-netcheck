@@ -23,8 +23,10 @@ Question: UniFi Teleport on a UniFi Travel Router (UTR) never connects. Is the c
 | H2: firmware 118+ changed how Teleport connects | HYPOTHESIS | for it: the version boundary |
 | H3: this UTR's binding on the CGM is broken | HYPOTHESIS | |
 | H4: the home DNS filter blocks a host Teleport needs | HYPOTHESIS | `teleport-cgm.sh info` DNS rows, Control D activity log for the CGM |
-| H5: the CGM WAN is behind NAT, so nothing from outside reaches it directly | testable | `teleport-cgm.sh info`, row "inbound to WAN" |
-| Teleport uses WireGuard over UDP | HYPOTHESIS | not verified here; port and relay behaviour are not documented |
+| H5: the CGM WAN is behind NAT, so nothing from outside reaches it directly | testable | `teleport-cgm.sh info`, row "inbound to WAN". Per UniFi docs Teleport works behind NAT on both sides, so H5 alone does not break Teleport; it only blinds `capture` |
+| H6: the CGM WAN has no IPv6 and this setup is one of the cases where Teleport needs it | HYPOTHESIS | UniFi docs: "Teleport requires an IPv6 connection on your gateway's WAN in some circumstances" (which ones: not documented). `teleport-cgm.sh info`, row "WAN IPv6" |
+| Teleport uses WireGuard; works with gateway and client behind NAT | CONFIRMED | UniFi Help Center, "UniFi Gateway - Teleport VPN". Port, relay and NAT-traversal details are not documented |
+| Quick check of any connection (no UTR, no server): can a VPN connect here? | - | [vpn.md](vpn.md), `scripts/vpn.awk` |
 | Which UI hosts Teleport uses for brokering | UNKNOWN | default list = UI hosts that answer with their own servers (checked 2026-10-20), not proven to be Teleport's. `*.ui.com` has wildcard DNS: a made-up name also resolves |
 
 ## What each side can see
@@ -98,7 +100,7 @@ The client and the CGM both print UTC, so rows line up by time. On iPhone keep C
 | fails | works | 1-byte probes arrive, the 148 B WG-shaped one does not | the uplink filters the WireGuard handshake shape (H1, protocol filter) |
 | fails | works | probes arrive incl. the WG-shaped one; nothing from the UTR when Teleport is toggled | not a port block: the UTR does not send to the CGM (H2/H3), or sends to a relay. In the LTE run `watch` shows the UTR peer's endpoint: client IP = direct, other IP = relay |
 | fails | works | UTR packets reach the Teleport port, `watch` shows no handshake | the CGM drops them: keys or binding (H3) |
-| fails | fails | - | not the uplink: firmware, binding (H2/H3) or home side (H4/H5): check the CGM `info` DNS and "inbound to WAN" rows |
+| fails | fails | - | not the uplink: firmware, binding (H2/H3) or home side (H4/H6): check the CGM `info` DNS and "WAN IPv6" rows |
 | works | works | - | not reproduced: keep the logs, repeat |
 
 If "inbound to WAN" is WARN (H5), the capture cannot see outside probes at all: NONE there means nothing. Fix that before reading the capture.
