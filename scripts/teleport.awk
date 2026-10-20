@@ -434,7 +434,6 @@ function header(what,    d) {
     out("== UTR Teleport check, " what " ==")
     out("run: " label "  teleport: " tp "  platform: " PLAT "  started: " d)
     out("home WAN: " (home != "" ? home : "-") "  teleport port: " (tport != "" ? tport : "-") "  home LAN probe: " (homelan != "" ? homelan : "-") "  UTR: " gw)
-    if (LOG != "") out("log: " LOG)
     if (NOTE != "") out(NOTE)
     out("")
     out("| time UTC | layer | test | result | detail |")
@@ -462,8 +461,15 @@ function open_log(    d, stamp, f) {
     LOG = ""
 }
 
+# Blink: ~/iCloud is the Blink folder in iCloud Drive, so show it the way the Files app does.
+function pretty(f,    h) {
+    h = ENVIRON["HOME"] "/iCloud/"
+    if (PLAT == "blink" && index(f, h) == 1) return "Files > iCloud Drive > Blink > " substr(f, length(h) + 1)
+    return f
+}
+
 function finish() {
-    if (LOG != "") { close(LOG); print ""; print "Saved: " LOG }
+    if (LOG != "") { close(LOG); print ""; print "Saved (same as above): " pretty(LOG) }
     system("rm -f " OUT)
 }
 

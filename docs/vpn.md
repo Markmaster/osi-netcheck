@@ -7,7 +7,7 @@ One command, any connection (Wi-Fi, LTE, iPhone hotspot), no server of your own.
 | Blink | `scripts/vpn.awk`, `stun-req.bin`, `ntp-req.bin` -> iCloud Drive > Blink > scripts; `blink/snips/vpn/` -> iCloud Drive > Blink > snips > vpn | snip `vpn/run` (no fields, `⌘↩` from the list works); `vpn/run-server` adds a TCP test to your server |
 | macOS | `mkdir -p ~/vpn && cd ~/vpn && for f in vpn.awk stun-req.bin ntp-req.bin; do curl -sSLO https://raw.githubusercontent.com/Markmaster/osi-netcheck/main/scripts/$f; done` | `awk -f ~/vpn/vpn.awk`, optional `-v server=IP -v tcp=PORT` |
 
-Run it once on Wi-Fi and once on LTE (on iPhone: Wi-Fi off, or Cellular Data off for a Wi-Fi-only run). The log name carries the connection type: `vpn-wifi-…`, `vpn-lte-…`, `vpn-hotspot-…`.
+Run it once on Wi-Fi and once on LTE (on iPhone: Wi-Fi off, or Cellular Data off for a Wi-Fi-only run). The same output is saved as a text file, for sending it on without copying from the terminal: Files > iCloud Drive > Blink > `vpn-wifi-…`, `vpn-lte-…`, `vpn-hotspot-…`.
 
 ## What it checks
 
@@ -49,7 +49,8 @@ POSSIBLE, not LIKELY, for your own WireGuard/OpenVPN port: networks that open on
 | WireGuard runs over UDP only | CONFIRMED | WireGuard protocol design |
 | A TCP or relay fallback for Teleport | UNKNOWN | not documented, so "NO (likely)" when UDP is blocked |
 | UDP to STUN on 3478 and 19302 working means a WireGuard port works too | HYPOTHESIS | a filter can block single ports; the verdict says LIKELY, not YES |
-| Blink commands used here (`nc -u -w N < file`, `curl -6`, `ifconfig`, `uname`, `date`) | CONFIRMED by source, not run on a device yet | see [teleport.md](teleport.md) for source lines |
+| Blink commands used here (`nc -u -w N < file`, `curl -6`, `ifconfig`, `uname`, `date`) | CONFIRMED on an iPhone 2026-10-20 (Wi-Fi behind a UniFi Travel Router, and T-Mobile LTE with CLAT): all rows ran, STUN/NTP answered on both | first device run |
+| iOS puts 192.0.0.x on `utun0` by itself (seen with no full-tunnel VPN: the public IP was the carrier's on each network), so 192.0.0.x is not treated as a VPN | CONFIRMED on that run (what owns `utun0`: UNKNOWN) | first device run |
 
 ## Limits
 
@@ -57,4 +58,5 @@ POSSIBLE, not LIKELY, for your own WireGuard/OpenVPN port: networks that open on
 - UDP 443 (QUIC) is not tested: Blink's curl has no HTTP/3 and its `nc` sends at most 1024 bytes per datagram, below QUIC's 1200.
 - UDP probes go over IPv4 (IPv6 on IPv6-only links); IPv6 is otherwise checked over HTTPS only.
 - Blink's awk aborts (`towc: multibyte conversion failure`) when a regex meets bytes that are not valid UTF-8, and UDP replies and web pages contain such bytes. Replies are therefore tested with `index()` and `==` only (reproduced with a native build of Blink's awk: the first version of this script crashed on a real NTP reply, this one does not).
-- Simulation only so far: fake commands with binary STUN/NTP replies and a Latin-1 portal page, 152 platform/network/argument combinations in a UTF-8 locale, identical output on Blink's awk build, mawk and nawk. Not run on an iPhone or a Mac yet.
+- First iPhone run 2026-10-20: Wi-Fi and LTE both ran through the UDP rows; the LTE paste ended at the IPv6 row with no error text, so whether that run finished is not known yet.
+- Fake commands: binary STUN/NTP replies and a Latin-1 portal page, 152 platform/network/argument combinations in a UTF-8 locale, identical output on Blink's awk build, mawk and nawk. Not run on an iPhone or a Mac yet.

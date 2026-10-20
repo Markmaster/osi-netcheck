@@ -60,11 +60,13 @@ function link(    w, c, g, ifc, i, cur, f, wdev) {
         if ((KIND == "wifi" && w == "IPv6 only") || (KIND == "lte" && c == "IPv6 only")) { V6ONLY = 1; HAS4 = 0 }
         if ((KIND == "wifi" && w ~ /^192\.0\.0\./) || (KIND == "lte" && c ~ /^192\.0\.0\./)) { V6ONLY = 1; LINK_TXT = LINK_TXT " (IPv6-only network, IPv4 via CLAT/NAT64)" }
         # A connected iOS VPN shows up as a utun/ipsec/ppp interface with an IPv4 address.
+        # 192.0.0.x is skipped: iOS puts such addresses on utun0 by itself (seen on an iPhone with
+        # no VPN on, public IP still the carrier's), like the 192.0.0.2 CLAT address on pdp_ip0.
         run("ifconfig")
         cur = ""
         for (i = 1; i <= NL; i++) {
             if (LINES[i] ~ /^[a-z]+[0-9]+:/) { cur = LINES[i]; sub(/:.*$/, "", cur) }
-            else if (cur ~ /^(utun|ipsec|ppp)/ && LINES[i] ~ /^[ \t]*inet [0-9]/) { split(LINES[i], f, " "); TUN = cur " " f[2]; break }
+            else if (cur ~ /^(utun|ipsec|ppp)/ && LINES[i] ~ /^[ \t]*inet [0-9]/) { split(LINES[i], f, " "); if (f[2] !~ /^192\.0\.0\./) { TUN = cur " " f[2]; break } }
         }
         return
     }
@@ -127,7 +129,7 @@ function udp(    a, i, s) {
     if (U53) row("L4", "UDP 53 DNS to 1.1.1.1", "OK", "Cloudflare answered (" s ")")
     else {
         a = dig_first("dig @1.1.1.1 example.com +short +time=2 +tries=1")
-        if (a != "") row("L4", "UDP 53 DNS to 1.1.1.1", "HIJACK", "answered, but not by Cloudflare: the network answers DNS itself")
+        if (a != "") row("L4", "UDP 53 DNS to 1.1.1.1", "HIJACK", "answered, but not by Cloudflare: the network or a DNS app on this device answers DNS itself")
         else row("L4", "UDP 53 DNS to 1.1.1.1", "FAIL", "no answer")
     }
 }
@@ -321,7 +323,6 @@ function header(    d) {
     d = (NL > 0) ? LINES[1] : "?"
     out("== VPN check: can a VPN connect over this connection? ==")
     out("connection: " KIND "  platform: " PLAT "  started: " d (server != "" ? "  server: " server ":" tcp : ""))
-    if (LOG != "") out("log: " LOG)
     out("")
     out("| time UTC | layer | test | result | detail |")
     out("|---|---|---|---|---|")
@@ -358,8 +359,15 @@ function try_log(f,    line) {
     return 1
 }
 
+# Blink: ~/iCloud is the Blink folder in iCloud Drive, so show it the way the Files app does.
+function pretty(f,    h) {
+    h = ENVIRON["HOME"] "/iCloud/"
+    if (PLAT == "blink" && index(f, h) == 1) return "Files > iCloud Drive > Blink > " substr(f, length(h) + 1)
+    return f
+}
+
 function finish() {
-    if (LOG != "") { close(LOG); print ""; print "Saved: " LOG }
+    if (LOG != "") { close(LOG); print ""; print "Saved (same as above): " pretty(LOG) }
     system("rm -f " OUT)
 }
 
