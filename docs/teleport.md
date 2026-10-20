@@ -118,4 +118,5 @@ If "inbound to WAN" is WARN (H5), the capture cannot see outside probes at all: 
 - UI's captive probe URL is not documented, so it is not tested (MANUAL row).
 - `capture` with a source IP assumes the UTR and the client leave the uplink with the same public IP. Large NATs can use a pool; run `capture` without a source IP to filter by port instead.
 - IPv4 only.
+- Network replies (STUN answers, portal pages, server headers in `curl -v`) are parsed with `index()`/`substr()` only: Blink's awk aborts when a regex meets bytes that are not valid UTF-8 (see [vpn.md](vpn.md#limits)). Retested with binary STUN replies, a Latin-1 portal page and a Latin-1 header, 36 combinations in a UTF-8 locale.
 - Simulation only so far: fake `ping`/`nc`/`curl`/`dig`/`ifconfig`/`route`/`traceroute` for the client, 66 platform/fault/argument combinations with identical output on Blink's awk build (`awk-awk-35` from ios_system v3.0.3), mawk and nawk; fake `ip`/`wg`/`tcpdump`/`getent`/`ss` for the CGM script, `shellcheck` clean. Not yet run on a UTR, a Mac or a CGM.

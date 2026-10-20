@@ -194,7 +194,8 @@ function stun(host, port,    rc, i, err) {
     STUN_TRIED++
     rc = run("nc -u -w 2 " host " " port " < " dir "/stun-req.bin")
     err = ""
-    for (i = 1; i <= NL; i++) if (LINES[i] ~ /^(nc|netcat): /) err = LINES[i]
+    # The reply is binary: index() only, Blink's awk aborts when a regex meets invalid UTF-8.
+    for (i = 1; i <= NL; i++) if (index(LINES[i], "nc: ") == 1 || index(LINES[i], "netcat: ") == 1) err = LINES[i]
     if (err != "") row("L4", "UDP STUN " host ":" port, "FAIL", err)
     else if (NL > 0) { row("L4", "UDP STUN " host ":" port, "OK", "answer received: UDP out and back works"); STUN_OK++ }
     else row("L4", "UDP STUN " host ":" port, "FAIL", "no answer in 2 s")
@@ -212,13 +213,15 @@ function l5_checks(    n, h, i) {
 # HTTPS GET with timings and the certificate chain.
 # macOS curl (LibreSSL/OpenSSL) prints "issuer: ...", Blink curl (Secure Transport) prints
 # one "Server certificate: <subject>" line per certificate, leaf first.
-function tls(host,    rc, i, f, t, code, issuer, chain, nchain, s, d) {
+function tls(host,    rc, i, f, t, code, issuer, chain, nchain, s, d, p) {
     rc = run("curl -sS -v -o /dev/null -m 10 -w \"\\nTIMES %{time_namelookup} %{time_connect} %{time_appconnect} %{time_starttransfer} %{http_code} %{remote_ip}\\n\" https://" host "/")
     t = ""; issuer = ""; nchain = 0
+    # curl -v includes the server's headers, which can hold any bytes: find lines with
+    # substr()/index() and run regexes only on the certificate lines picked out.
     for (i = 1; i <= NL; i++) {
-        if (LINES[i] ~ /^TIMES /) t = LINES[i]
-        else if (LINES[i] ~ /^\*  *issuer:/) { issuer = LINES[i]; sub(/^\*  *issuer: */, "", issuer) }
-        else if (LINES[i] ~ /Server certificate: ./) { s = LINES[i]; sub(/^.*Server certificate: */, "", s); chain[++nchain] = s }
+        if (substr(LINES[i], 1, 6) == "TIMES ") t = LINES[i]
+        else if (substr(LINES[i], 1, 1) == "*" && index(LINES[i], " issuer: ")) { issuer = LINES[i]; sub(/^.* issuer: */, "", issuer) }
+        else if ((p = index(LINES[i], "Server certificate: ")) && length(LINES[i]) > p + 19) chain[++nchain] = substr(LINES[i], p + 20)
     }
     if (issuer == "" && nchain >= 2) issuer = chain[2]
     if (issuer ~ /CN ?= ?/) { sub(/^.*CN ?= ?/, "", issuer); sub(/[,;\/].*$/, "", issuer) }
@@ -287,7 +290,8 @@ function captive(name, url, want, body,    rc, i, code, redir, got) {
     rc = run("curl -sS -m 8 -w \"\\nHTTPCODE %{http_code} %{redirect_url}\\n\" " url)
     code = ""; redir = ""; got = (body == "")
     for (i = 1; i <= NL; i++) {
-        if (LINES[i] ~ /^HTTPCODE /) { code = LINES[i]; sub(/^HTTPCODE /, "", code); redir = code; sub(/^[0-9]+ */, "", redir); sub(/ .*$/, "", code) }
+        # Page bodies can be any bytes: substr()/index() only, no regex on them.
+        if (substr(LINES[i], 1, 9) == "HTTPCODE ") { code = substr(LINES[i], 10); redir = substr(code, 5); code = substr(code, 1, 3) }
         else if (body != "" && index(LINES[i], body) > 0) got = 1
     }
     if (rc != 0 || code == "") { row("L7", "captive probe " name, "FAIL", curl_err(rc)); PORTAL++ }
@@ -394,10 +398,10 @@ function if_ip(ifc,    i, f) {
 function public_ip(    i, s) {
     PUBSRC = "1.1.1.1 trace"
     if (run("curl -sS -m 8 https://1.1.1.1/cdn-cgi/trace") == 0) {
-        for (i = 1; i <= NL; i++) if (LINES[i] ~ /^ip=/) { s = LINES[i]; sub(/^ip=/, "", s); return s }
+        for (i = 1; i <= NL; i++) if (substr(LINES[i], 1, 3) == "ip=") return substr(LINES[i], 4)
     }
     PUBSRC = "api.ipify.org"
-    if (run("curl -sS -m 8 https://api.ipify.org") == 0 && NL > 0 && LINES[1] ~ /^[0-9a-fA-F:.]+$/) return LINES[1]
+    if (run("curl -sS -m 8 https://api.ipify.org") == 0 && NL > 0 && length(LINES[1]) <= 39 && is_ip(LINES[1])) return LINES[1]
     return ""
 }
 
