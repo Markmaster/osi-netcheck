@@ -55,6 +55,8 @@ Steps 1-4 and 6/6b are DNS-agnostic; 5 and 7 are Control D specific.
 - [`blink/snips/osi`](blink/snips/osi): one snip per step for the Blink local shell.
 - [`snippets/`](snippets/): the same steps as plain text for any snippet manager, plus a cheat sheet and an iPhone checklist.
 - [`docs/how-it-works.md`](docs/how-it-works.md): why this order, why `ping` and not `dig` on iOS, why awk, limits, testing.
+- [`docs/vpn.md`](docs/vpn.md): can a VPN connect over this connection (Wi-Fi or LTE)? `scripts/vpn.awk`, snip `vpn/run`, verdict per VPN type (Teleport/Identity, WireGuard, OpenVPN, L2TP). No server needed. Simulation only so far.
+- [`docs/teleport.md`](docs/teleport.md): a second check, UniFi Teleport on a UniFi Travel Router: uplink or router? `scripts/teleport.awk` (Blink and macOS, behind the router), `scripts/teleport-cgm.sh` (on the UniFi gateway), snips `blink/snips/tp`. Simulation only so far.
 
 ## Status
 

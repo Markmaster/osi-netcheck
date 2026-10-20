@@ -7,11 +7,13 @@ For the local `blink>` shell, before any ssh/mosh. Needs Blink 18.6.0+ (older ve
 | Copy | To | Inside Blink |
 |---|---|---|
 | `blink/snips/osi/` | iCloud Drive > Blink > snips > osi | snips `osi/*` |
-| `scripts/` | iCloud Drive > Blink > scripts (next to `snips`, not inside) | `~/iCloud/scripts/osi.awk` |
+| `blink/snips/vpn/` ([VPN check](../docs/vpn.md)) | iCloud Drive > Blink > snips > vpn | snips `vpn/*` |
+| `blink/snips/tp/` (optional, [Teleport check](../docs/teleport.md)) | iCloud Drive > Blink > snips > tp | snips `tp/*` |
+| `scripts/` | iCloud Drive > Blink > scripts (next to `snips`, not inside) | `~/iCloud/scripts/osi.awk`, `vpn.awk`, `teleport.awk` and the `.bin` request files |
 
 - `scripts` inside `snips` = `awk: can't open file` on `osi/run`, plus a stray snip `scripts/osi`.
 - Cloud icon on a file = not downloaded yet: long-press -> Download Now. Blink skips files that are not on the device.
-- Every file in `osi/` becomes a snip; keep nothing else there.
+- Every file in `osi/`, `vpn/` and `tp/` becomes a snip; keep nothing else there.
 - Blink reads snips only from Settings > Snips > Default Location: set it to iCloud Drive.
 
 ## Use
