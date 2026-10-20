@@ -130,8 +130,14 @@ function udp(    a, i, s) {
     if (U53) row("L4", "UDP 53 DNS to 1.1.1.1", "OK", "Cloudflare answered (" s ")")
     else {
         a = dig_first("dig @1.1.1.1 example.com +short +time=2 +tries=1")
-        if (a != "") row("L4", "UDP 53 DNS to 1.1.1.1", "HIJACK", "answered, but not by Cloudflare: the network or a DNS app on this device answers DNS itself")
-        else row("L4", "UDP 53 DNS to 1.1.1.1", "FAIL", "no answer")
+        if (a == "") row("L4", "UDP 53 DNS to 1.1.1.1", "FAIL", "no answer")
+        else {
+            # Only Control D answers verify.controld.com with 147.185.34.1 (as in osi.awk). An iOS DNS
+            # profile does not catch "dig @1.1.1.1" (iPhone 2026-10-20, Control D profile on): a router does.
+            run("dig @1.1.1.1 verify.controld.com +short +time=2 +tries=1")
+            if (line_is("147.185.34.1")) row("L4", "UDP 53 DNS to 1.1.1.1", "HIJACK", "answered by Control D, not Cloudflare: the router or an app on this device redirects DNS to Control D")
+            else row("L4", "UDP 53 DNS to 1.1.1.1", "HIJACK", "answered, but not by Cloudflare: the network or a VPN-mode DNS app answers DNS itself (a DNS profile does not)")
+        }
     }
 }
 

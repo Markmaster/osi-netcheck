@@ -17,7 +17,7 @@ Run it once on Wi-Fi and once on LTE (on iPhone: Wi-Fi off, or Cellular Data off
 | TCP 443, HTTPS to 1.1.1.1 | `nc`, `curl` by IP | everything |
 | Wi-Fi login page | Apple captive probe | everything: no VPN before the portal login |
 | UDP 3478, 19302 | STUN binding request to Cloudflare and Google over IPv4 (`nc -4`; `-6` on IPv6-only links), answer expected | WireGuard, Teleport, UniFi Identity, OpenVPN UDP, L2TP/IPsec |
-| UDP 123, 53 | NTP to time.apple.com; `id.server` CHAOS TXT to 1.1.1.1, which only Cloudflare answers with its site code (`HIJACK` = the network answers DNS itself) | tells "UDP blocked" from "UDP only to DNS/NTP" |
+| UDP 123, 53 | NTP to time.apple.com; `id.server` CHAOS TXT to 1.1.1.1, which only Cloudflare answers with its site code (`HIJACK` = the network answers DNS itself; Control D is named when `verify.controld.com` comes back as `147.185.34.1`) | tells "UDP blocked" from "UDP only to DNS/NTP" |
 | IPv6 | `curl -6` to one.one.one.one | context (Teleport needs IPv6 on the gateway WAN in some cases: home side, not checked here) |
 | HTTPS unifi.ui.com, api.ui.com | `curl`, certificate checked | Teleport (cloud brokering) |
 | TCP server:port | `nc -z`, only with `-v server=` | OpenVPN over TCP |
@@ -46,6 +46,7 @@ POSSIBLE, not LIKELY, for your own WireGuard/OpenVPN port: networks that open on
 | Most VPNs except Teleport need a public IP at home | CONFIRMED | UniFi Help Center, "UniFi Remote Access: VPN and Port Forwarding" |
 | UniFi Identity One-Click VPN = OpenVPN (port 10118, UDP recommended, TCP possible) or WireGuard (51820); the console needs a public IP, not CGNAT 100.64.0.0/10 | CONFIRMED | help.ui.com articles 17167292342295, 17198673056151, 27900437407895 (fetched 2026-10-20) |
 | `dig @1.1.1.1 CH TXT id.server` returns a Cloudflare site code | CONFIRMED on an iPhone 2026-10-20: `"sea07"` (the first version expected 3 capitals like `"SJC"` and printed a false HIJACK) | that a hijacking resolver does not return one: HYPOTHESIS |
+| An iOS DNS profile (Control D) does not catch `dig @1.1.1.1`, so it cannot cause HIJACK | CONFIRMED on an iPhone 2026-10-20 with the Control D profile on: `dig @1.1.1.1 verify.controld.com` empty (Control D answers `147.185.34.1`), `id.server` = `"sea07"`. The HIJACK rows of that run came from the site-code pattern | first device run |
 | WireGuard runs over UDP only | CONFIRMED | WireGuard protocol design |
 | A TCP or relay fallback for Teleport | UNKNOWN | not documented, so "NO (likely)" when UDP is blocked |
 | UDP to STUN on 3478 and 19302 working means a WireGuard port works too | HYPOTHESIS | a filter can block single ports; the verdict says LIKELY, not YES |
