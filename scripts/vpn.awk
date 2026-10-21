@@ -38,6 +38,7 @@ BEGIN {
     internet()
     udp()
     ipv6()
+    icmp()
     cloud()
     if (server != "") server_tcp()
     verdict()
@@ -167,6 +168,22 @@ function ipv6(    rc) {
     else row("L3", "IPv6 to the internet", "NONE", (rc == 6 || rc == 7) ? "no IPv6 on this connection" : curl_err(rc))
 }
 
+# ---------- ICMP: what a UniFi Travel Router checks ----------
+
+# The UTR's internet check is ICMP only (firmware 6.6.115-6.6.122): one of 1.1.1.1, 8.8.8.8,
+# www.microsoft.com must answer ping, or it shows "No Internet". Since 6.6.117 its Teleport client
+# then waits for WAN and never connects; its WireGuard client waits too, OpenVPN does not.
+function icmp(    n, t, i, f) {
+    ICMP_OK = 0; f = 0
+    n = split("1.1.1.1 8.8.8.8 www.microsoft.com", t, " ")
+    for (i = 1; i <= n; i++) {
+        if (run("ping -c 2 -W 2000 " t[i]) == 0) ICMP_OK++
+        else if (contains("prohibited")) f = 1
+    }
+    if (ICMP_OK) row("L3", "ping 1.1.1.1, 8.8.8.8, www.microsoft.com", "OK", ICMP_OK "/" n " reply")
+    else row("L3", "ping 1.1.1.1, 8.8.8.8, www.microsoft.com", "FAIL", (f ? "prohibited by filter" : "no reply") ": the network drops ICMP")
+}
+
 # ---------- UniFi cloud (Teleport brokering) ----------
 
 function cloud(    n, h, i, rc) {
@@ -195,7 +212,7 @@ function server_tcp(    rc) {
 # ---------- verdict: an inference from the rows above ----------
 
 function verdict(    inet, stun, tested, nudp, v, tcpok) {
-    inet = (TCP443 || HTTPS || UI_OK > 0 || PUB6 != "" || U3478 == 1 || U19302 == 1 || U53 || U123 == 1)
+    inet = (TCP443 || HTTPS || UI_OK > 0 || PUB6 != "" || U3478 == 1 || U19302 == 1 || U53 || U123 == 1 || ICMP_OK > 0)
     stun = (U3478 == 1 || U19302 == 1)
     tested = (U3478 >= 0 || U19302 >= 0)
     nudp = (U53 || U123 == 1) ? "UDP to STUN ports 3478/19302 gets no answer, only DNS/NTP do" : "no UDP answer on 3478, 19302, 123 or 53"
@@ -214,6 +231,11 @@ function verdict(    inet, stun, tested, nudp, v, tcpok) {
     else v = "LIKELY: UDP out and back works (tested on STUN ports), UniFi cloud reachable"
     if (V6ONLY) v = v ". This connection is IPv6-only (IPv4 via NAT64): if Teleport fails, enable IPv6 on the home gateway WAN"
     out("- Teleport: " v)
+
+    # Teleport and WireGuard on a UniFi Travel Router: gated on its ICMP check (see icmp()).
+    if (ICMP_OK) v = "its internet check (ping) passes here, so the rows above apply to it too"
+    else v = "NO on firmware 6.6.117+: nothing answers ping, so the UTR shows No Internet and its Teleport and WireGuard wait until ping works. Its OpenVPN client is not gated"
+    out("- Teleport or WireGuard on a UniFi Travel Router: " v)
 
     # WireGuard, OpenVPN UDP and UniFi Identity (it is WireGuard 51820 or OpenVPN 10118 to the console's public IP).
     if (!tested) v = untested()

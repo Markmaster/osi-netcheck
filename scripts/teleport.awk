@@ -110,7 +110,7 @@ function link_checks(    i, s, ch, ipaddr, ifc, g) {
 
 # ---------- L3: addressing and path ----------
 
-function l3_checks(    ok, f) {
+function l3_checks(    ok, f, n, t, i) {
     ok = (run("ping -c 2 -W 2000 " gw) == 0)
     row("L3", "ping UTR " gw, ok ? "OK" : "INFO", ok ? "replies" : "no reply (the UTR may ignore ping; DNS below decides)")
 
@@ -122,9 +122,17 @@ function l3_checks(    ok, f) {
     else if (PUBIP == home) row("L3", "egress vs home WAN", "INFO", "egress = home WAN: client traffic goes through Teleport")
     else if (PUBIP != "") row("L3", "egress vs home WAN", "INFO", "egress " PUBIP " is not home " home ": client traffic leaves via the uplink")
 
-    ok = (run("ping -c 2 -W 2000 1.1.1.1") == 0)
-    f = has("prohibited")
-    row("L3", "ping 1.1.1.1", ok ? "OK" : "INFO", ok ? "replies" : (f ? "prohibited by filter" : "no reply") ": ICMP result alone proves nothing")
+    # The UTR's own internet check is ICMP only (firmware 6.6.115-6.6.122, unifi_mwan and mcad):
+    # one of 1.1.1.1, 8.8.8.8, www.microsoft.com must answer ping, or the app shows "No Internet".
+    # Since 6.6.117 teleport-client then waits for WAN and never connects; WireGuard waits too.
+    ICMP_OK = 0; f = 0
+    n = split("1.1.1.1 8.8.8.8 www.microsoft.com", t, " ")
+    for (i = 1; i <= n; i++) {
+        if (run("ping -c 2 -W 2000 " t[i]) == 0) ICMP_OK++
+        else if (has("prohibited")) f = 1
+    }
+    if (ICMP_OK) row("L3", "ping 1.1.1.1, 8.8.8.8, www.microsoft.com", "OK", ICMP_OK "/" n " reply: the UTR's internet check can pass on this uplink")
+    else row("L3", "ping 1.1.1.1, 8.8.8.8, www.microsoft.com", "FAIL", (f ? "prohibited by filter" : "no reply") ": the UTR shows No Internet; firmware 6.6.117+ then does not start Teleport or WireGuard (OpenVPN is not gated)")
 
     if (PLAT == "macos") {
         if (home != "") trace(home, "home")
@@ -318,6 +326,7 @@ function facts() {
     out("")
     out("Observed in this run (" label ", Teleport " tp "):")
     if (PUBIP != "") out("- public IP " PUBIP (home != "" ? (PUBIP == home ? " = home WAN" : ", not home WAN") : ""))
+    out("- ICMP to the UTR's check targets: " ICMP_OK "/3 reply" (ICMP_OK ? "" : ": UTR No Internet, Teleport on 6.6.117+ waits for WAN (see docs/teleport.md H7)"))
     if (STUN_TRIED) out("- UDP out and back to STUN: " STUN_OK "/" STUN_TRIED " answered")
     out("- TLS: " TLS_OK "/" TLS_N " OK" (TLS_CERT ? ", " TLS_CERT " with an untrusted certificate" : ", no untrusted certificate seen"))
     out("- captive probes: " (PORTAL ? PORTAL " not as expected" : "all as expected"))
