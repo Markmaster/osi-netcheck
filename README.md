@@ -56,6 +56,7 @@ Steps 1-4 and 6/6b are DNS-agnostic; 5 and 7 are Control D specific.
 - [`snippets/`](snippets/): the same steps as plain text for any snippet manager, plus a cheat sheet and an iPhone checklist.
 - [`docs/how-it-works.md`](docs/how-it-works.md): why this order, why `ping` and not `dig` on iOS, why awk, limits, testing.
 - [`docs/vpn.md`](docs/vpn.md): can a VPN connect over this connection (Wi-Fi or LTE)? `scripts/vpn.awk`, snip `vpn/run`, verdict per VPN type (Teleport/Identity, WireGuard, OpenVPN, L2TP). No server needed. Simulation only so far.
+- [`docs/mosh.md`](docs/mosh.md): why a mosh session freezes between Wi-Fi and LTE (T-Mobile, NAT64, Blink). `scripts/mosh.awk` on the phone (snip `mosh/run`) tests whether a session started on one network can reach its server from the other; `scripts/mosh-watch.sh` on the server shows what happens to a real session while the phone moves. Simulation only so far.
 - [`docs/teleport.md`](docs/teleport.md): a second check, UniFi Teleport on a UniFi Travel Router: uplink or router? `scripts/teleport.awk` (Blink and macOS, behind the router), `scripts/teleport-cgm.sh` (on the UniFi gateway), snips `blink/snips/tp`. Simulation only so far.
 
 ## Status
