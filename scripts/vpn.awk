@@ -6,7 +6,7 @@
 # macOS:  awk -f ~/vpn/vpn.awk   (vpn.awk, stun-req.bin and ntp-req.bin from scripts/ in one folder)
 #
 # What a VPN needs from the network, tested without a server of your own: internet and no
-# Wi-Fi login page, UDP out and back (STUN 3478 and 19302, NTP 123, DNS 53 to 1.1.1.1), HTTPS
+# login page, UDP out and back (STUN 3478 and 19302, NTP 123, DNS 53 to 1.1.1.1), HTTPS
 # to the UniFi cloud without interception (Teleport). IPv6 is shown for context.
 # Optional -v server=IP -v tcp=PORT: TCP connect to your own server (OpenVPN over TCP).
 # UDP to your own server's port cannot be confirmed from the phone: WireGuard does not answer
@@ -34,8 +34,8 @@ BEGIN {
     header()
 
     row("L2", "connection", LINK_OK ? "OK" : "FAIL", LINK_TXT)
-    if (TUN != "") row("L2", "VPN already on?", "WARN", TUN ": a VPN looks connected, the rows below then describe the VPN. Turn it off and run again")
     internet()
+    vpn_on()
     udp()
     ipv6()
     icmp()
@@ -48,26 +48,33 @@ BEGIN {
 # ---------- link: Wi-Fi or LTE ----------
 
 function link(    w, c, g, ifc, i, cur, f, wdev) {
-    LINK_OK = 1; HAS4 = 1; V6ONLY = 0; TUN = ""
+    LINK_OK = 1; HAS4 = 1; V6ONLY = 0; TUN = ""; TUNSKIP = ""; LINKDEV = ""
     if (PLAT == "blink") {
         w = if_ip("en0"); c = if_ip("pdp_ip0")
         if (w ~ /^169\.254\./) w = ""
         if (w == "" && if_has6("en0")) w = "IPv6 only"
         if (c == "" && if_has6("pdp_ip0")) c = "IPv6 only"
+        CELLUP = (w != "" && c != "")
         if (w != "" && c != "") { KIND = "wifi"; LINK_TXT = "Wi-Fi " w ", cellular also up (" c "): iOS can move traffic to LTE if Wi-Fi is weak" }
         else if (w != "") { KIND = "wifi"; LINK_TXT = "Wi-Fi " w }
         else if (c != "") { KIND = "lte"; LINK_TXT = "LTE/cellular " c }
         else { KIND = "none"; LINK_TXT = "no IP on Wi-Fi (en0) or cellular (pdp_ip0)"; LINK_OK = 0 }
+        LINKDEV = (KIND == "wifi") ? "en0" : (KIND == "lte" ? "pdp_ip0" : "")
         if ((KIND == "wifi" && w == "IPv6 only") || (KIND == "lte" && c == "IPv6 only")) { V6ONLY = 1; HAS4 = 0 }
         if ((KIND == "wifi" && w ~ /^192\.0\.0\./) || (KIND == "lte" && c ~ /^192\.0\.0\./)) { V6ONLY = 1; LINK_TXT = LINK_TXT " (IPv6-only network, IPv4 via CLAT/NAT64)" }
-        # A connected iOS VPN shows up as a utun/ipsec/ppp interface with an IPv4 address.
+        # A connected iOS VPN can show up as a utun/ipsec/ppp interface with an IPv4 address.
         # 192.0.0.x is skipped: iOS puts such addresses on utun0 by itself (seen on an iPhone with
         # no VPN on, public IP still the carrier's), like the 192.0.0.2 CLAT address on pdp_ip0.
+        # On 2026-10-20 a full-tunnel VPN went unseen here, so vpn_on() also compares egress IPs.
         run("ifconfig")
         cur = ""
         for (i = 1; i <= NL; i++) {
-            if (LINES[i] ~ /^[a-z]+[0-9]+:/) { cur = LINES[i]; sub(/:.*$/, "", cur) }
-            else if (cur ~ /^(utun|ipsec|ppp)/ && LINES[i] ~ /^[ \t]*inet [0-9]/) { split(LINES[i], f, " "); if (f[2] !~ /^192\.0\.0\./) { TUN = cur " " f[2]; break } }
+            if (LINES[i] ~ /^[A-Za-z][A-Za-z0-9_]*:/) { cur = LINES[i]; sub(/:.*$/, "", cur) }
+            else if (cur ~ /^(utun|ipsec|ppp)/ && LINES[i] ~ /^[ \t]*inet [0-9]/) {
+                split(LINES[i], f, " ")
+                if (f[2] !~ /^192\.0\.0\./) TUN = TUN (TUN != "" ? ", " : "") cur " " f[2]
+                else TUNSKIP = TUNSKIP (TUNSKIP != "" ? ", " : "") cur " " f[2]
+            }
         }
         return
     }
@@ -106,9 +113,40 @@ function internet(    rc) {
 
     PORTAL = 0
     rc = run("curl -sS -m 6 -w \"\\nHTTPCODE %{http_code}\\n\" http://captive.apple.com/hotspot-detect.html")
-    if (rc == 0 && line_is("HTTPCODE 200") && contains("Success")) row("L7", "Wi-Fi login page", "OK", "none (Apple probe answers Success)")
-    else if (rc == 0) { PORTAL = 1; row("L7", "Wi-Fi login page", "PORTAL", "Apple probe answered something else: log in via Safari first") }
-    else row("L7", "Wi-Fi login page", "FAIL", "Apple probe: " curl_err(rc))
+    if (rc == 0 && line_is("HTTPCODE 200") && contains("Success")) row("L7", "login page (Apple probe)", "OK", "none (Apple probe answers Success)")
+    else if (rc == 0) { PORTAL = 1; row("L7", "login page (Apple probe)", "PORTAL", "Apple probe answered something else: log in via Safari first") }
+    else if (rc == 6) row("L7", "login page (Apple probe)", "FAIL", "captive.apple.com does not resolve (curl 6): DNS fails for this name here, login page not tested")
+    else row("L7", "login page (Apple probe)", "FAIL", "Apple probe: " curl_err(rc))
+}
+
+# Is a VPN carrying the traffic? Blink: tunnel addresses from link(), and the egress IPv4 of the
+# default path vs a request bound to the link itself (en0 or pdp_ip0). A different /16 means a VPN
+# diverts traffic, or, on Wi-Fi with cellular up, that iOS sends it over LTE (checked via pdp_ip0).
+# Binding works only if the VPN lets apps use the link (not with enforced routes).
+function vpn_on(    ip, ipc, lte) {
+    lte = ""
+    if (PLAT == "blink" && LINKDEV != "" && PUB4 != "") {
+        ip = egress(LINKDEV)
+        if (ip != "" && !same16(ip, PUB4)) {
+            ipc = (LINKDEV == "en0" && CELLUP) ? egress("pdp_ip0") : ""
+            if (ipc != "" && same16(ipc, PUB4)) lte = "traffic leaves over LTE (" PUB4 "), not Wi-Fi (" ip ")"
+            else TUN = (TUN != "" ? TUN ", " : "") "traffic exits at " PUB4 ", " LINKDEV " itself at " ip
+        }
+    }
+    if (TUN != "") row("L2", "VPN already on?", "WARN", TUN ": a VPN looks connected, the rows below then describe the VPN. Turn it off and run again")
+    else if (PLAT == "blink") row("L2", "VPN already on?", "OK", "none seen" (TUNSKIP != "" ? " (" TUNSKIP " skipped: iOS sets 192.0.0.x itself)" : ""))
+    if (lte != "") row("L2", "path", "WARN", lte ": this run tests LTE. Turn off Cellular Data to test Wi-Fi")
+}
+
+# Public IPv4 of a request bound to one interface, empty if that fails.
+function egress(dev,    rc) {
+    rc = run("curl -sS -m 6 --interface " dev " https://1.1.1.1/cdn-cgi/trace")
+    return (rc == 0) ? trace_ip() : ""
+}
+
+function same16(x, y,    a, b) {
+    split(x, a, "."); split(y, b, ".")
+    return (a[1] == b[1] && a[2] == b[2])
 }
 
 # ---------- UDP out and back ----------
@@ -164,7 +202,9 @@ function udp_probe(host, port, file, what,    i, err, t) {
 function ipv6(    rc) {
     rc = run("curl -6 -sS -m 6 https://one.one.one.one/cdn-cgi/trace")
     PUB6 = (rc == 0) ? trace_ip() : ""
+    V6DROP = (PUB6 == "" && rc == 28 && LINKDEV != "" && if_has6(LINKDEV))
     if (PUB6 != "") row("L3", "IPv6 to the internet", "OK", PUB6)
+    else if (V6DROP) row("L3", "IPv6 to the internet", "FAIL", LINKDEV " has IPv6 but nothing answers in 6 s: dropped (a VPN without IPv6, or a filter)")
     else row("L3", "IPv6 to the internet", "NONE", (rc == 6 || rc == 7) ? "no IPv6 on this connection" : curl_err(rc))
 }
 
@@ -174,7 +214,8 @@ function ipv6(    rc) {
 # www.microsoft.com must answer ping, or it shows "No Internet". Since 6.6.117 its Teleport client
 # then waits for WAN and never connects; its WireGuard client waits too, OpenVPN does not.
 function icmp(    n, t, i, f) {
-    ICMP_OK = 0; f = 0
+    ICMP_OK = 0; f = 0; ICMP_SKIP = !HAS4
+    if (ICMP_SKIP) { row("L3", "ping 1.1.1.1, 8.8.8.8, www.microsoft.com", "SKIP", "no IPv4 on this link"); return }
     n = split("1.1.1.1 8.8.8.8 www.microsoft.com", t, " ")
     for (i = 1; i <= n; i++) {
         if (run("ping -c 2 -W 2000 " t[i]) == 0) ICMP_OK++
@@ -229,12 +270,14 @@ function verdict(    inet, stun, tested, nudp, v, tcpok) {
     else if (UI_CERT) v = "NO (likely): the network intercepts TLS to the UniFi cloud"
     else if (UI_OK < UI_N) v = "UNLIKELY: UniFi cloud not reachable over HTTPS"
     else v = "LIKELY: UDP out and back works (tested on STUN ports), UniFi cloud reachable"
-    if (V6ONLY) v = v ". This connection is IPv6-only (IPv4 via NAT64): if Teleport fails, enable IPv6 on the home gateway WAN"
+    if (V6ONLY && TUN == "" && !V6DROP) v = v ". This connection is IPv6-only (IPv4 via NAT64): if Teleport fails, IPv6 on the home gateway WAN may help"
     out("- Teleport: " v)
 
     # Teleport and WireGuard on a UniFi Travel Router: gated on its ICMP check (see icmp()).
-    if (ICMP_OK) v = "its internet check (ping) passes here, so the rows above apply to it too"
-    else v = "NO on firmware 6.6.117+: nothing answers ping, so the UTR shows No Internet and its Teleport and WireGuard wait until ping works. Its OpenVPN client is not gated"
+    if (TUN != "") v = "not tested: ping went through the VPN"
+    else if (ICMP_SKIP) v = "not tested: no IPv4 on this link"
+    else if (ICMP_OK) v = "its internet check (ping) passes here, so the rows above apply to it too"
+    else v = "LIKELY NO on firmware 6.6.117+: nothing answers ping, so the UTR shows No Internet and its Teleport and WireGuard wait for it (docs/teleport.md, H7). Its OpenVPN client is not gated"
     out("- Teleport or WireGuard on a UniFi Travel Router: " v)
 
     # WireGuard, OpenVPN UDP and UniFi Identity (it is WireGuard 51820 or OpenVPN 10118 to the console's public IP).
@@ -259,6 +302,7 @@ function verdict(    inet, stun, tested, nudp, v, tcpok) {
     if (CERT1 && !UI_CERT) out("Note: HTTPS to 1.1.1.1 has an untrusted certificate while the UniFi cloud is fine: 1.1.1.1 is intercepted or local on this network.")
     if (KIND == "wifi" && index(LINK_TXT, "cellular also up")) out("Note: cellular is also up. To test Wi-Fi alone, turn off Cellular Data and run again.")
     if (TUN != "") out("Note: a VPN looks connected (" TUN "): these results describe the VPN, not the network.")
+    else if (V6DROP) out("Note: IPv6 is dropped although " LINKDEV " has it: a full-tunnel VPN without IPv6 may be on. Check Settings > VPN.")
     out("Own servers and UniFi Identity need a public IP at home, not CGNAT 100.64.0.0/10 (UniFi docs).")
     out("Teleport does not, but may need IPv6 on the home gateway WAN (UniFi docs).")
     out("Final check: open the VPN app on this connection. If it fails while the rows are OK, the cause is not this network.")

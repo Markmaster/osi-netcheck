@@ -16,7 +16,8 @@
 #   homelan  an address on the home LAN that answers TCP 443, e.g. the CGM LAN IP; reachable = tunnel up
 #   ports    UDP ports to probe at home, default "51820 443 3478"
 #   gw       UTR LAN gateway and DNS, default 10.10.10.1
-#   hosts    TLS and DNS targets, default below. Which hosts Teleport really uses is not documented.
+#   hosts    TLS and DNS targets, default below. The UTR's Teleport client talks to cloudaccess.svc.ubnt.com
+#            (firmware strings, 6.6.115-6.6.122); the ui.com hosts are context.
 #   dir      folder with stun-req.bin and wg-probe.bin (Blink: ~/iCloud/scripts, macOS: ~/tp)
 #
 # Blink's local shell has no sh, so the logic is awk, as in osi.awk. Each probe runs through
@@ -31,7 +32,7 @@ BEGIN {
     if (watch != "" && watch !~ /^[0-9]+$/) { print "watch=\"" watch "\" is not a number of minutes"; exit 2 }
     if (gw == "") gw = "10.10.10.1"
     if (ports == "") ports = "51820 443 3478"
-    if (hosts == "") hosts = "unifi.ui.com sso.ui.com api.ui.com account.ui.com"
+    if (hosts == "") hosts = "cloudaccess.svc.ubnt.com unifi.ui.com sso.ui.com api.ui.com account.ui.com"
     if (label == "") label = "run"
     gsub(/[^A-Za-z0-9._-]/, "-", label)
     if (tp == "") tp = "not recorded"
@@ -132,7 +133,7 @@ function l3_checks(    ok, f, n, t, i) {
         else if (has("prohibited")) f = 1
     }
     if (ICMP_OK) row("L3", "ping 1.1.1.1, 8.8.8.8, www.microsoft.com", "OK", ICMP_OK "/" n " reply: the UTR's internet check can pass on this uplink")
-    else row("L3", "ping 1.1.1.1, 8.8.8.8, www.microsoft.com", "FAIL", (f ? "prohibited by filter" : "no reply") ": the UTR shows No Internet; firmware 6.6.117+ then does not start Teleport or WireGuard (OpenVPN is not gated)")
+    else row("L3", "ping 1.1.1.1, 8.8.8.8, www.microsoft.com", "FAIL", (f ? "prohibited by filter" : "no reply") ": the UTR shows No Internet; firmware 6.6.117+ then likely does not start Teleport or WireGuard (H7; OpenVPN is not gated)")
 
     if (PLAT == "macos") {
         if (home != "") trace(home, "home")
