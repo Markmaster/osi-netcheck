@@ -4,8 +4,12 @@ One command, any connection (Wi-Fi, LTE, iPhone hotspot), no server of your own.
 
 | Where | Install | Run |
 |---|---|---|
-| Blink | `scripts/vpn.awk`, `stun-req.bin`, `ntp-req.bin` -> iCloud Drive > Blink > scripts; `blink/snips/vpn/` -> iCloud Drive > Blink > snips > vpn | snip `vpn/run` (no fields, `⌘↩` from the list works); `vpn/run-server` adds a TCP test to your server |
-| macOS | `mkdir -p ~/vpn && cd ~/vpn && for f in vpn.awk stun-req.bin ntp-req.bin; do curl -sSLO https://raw.githubusercontent.com/Markmaster/osi-netcheck/main/scripts/$f; done` | `awk -f ~/vpn/vpn.awk`, optional `-v server=IP -v tcp=PORT` |
+| Blink | `scripts/vpn.awk`, `stun-req.bin`, `ntp-req.bin` -> iCloud Drive > Blink > scripts; `blink/snips/vpn/` -> iCloud Drive > Blink > snips > vpn | snip `vpn/run` (no fields, `⌘↩` from the list works); `vpn/run-server` adds a TCP test to your server; `vpn/run-home` adds your home WAN IP |
+| macOS | `mkdir -p ~/vpn && cd ~/vpn && for f in vpn.awk stun-req.bin ntp-req.bin; do curl -sSLO https://raw.githubusercontent.com/Markmaster/osi-netcheck/main/scripts/$f; done` | `awk -f ~/vpn/vpn.awk`, optional `-v server=IP -v tcp=PORT`, `-v home_ip=IP`, `-v ladder=1` |
+
+Optional parameters: `-v home_ip=IP` is your home WAN IPv4. If the run exits there, Teleport (or another VPN, also one on the router) is carrying the traffic, and a home resolver answering `dig @1.1.1.1` is INFO, not HIJACK. `-v ladder=1` (macOS only) adds a DF ping ladder.
+
+The time columns show local time first (with the zone), then UTC; the log file name stays in UTC.
 
 Run it once on Wi-Fi and once on LTE (on iPhone: Wi-Fi off, or Cellular Data off for a Wi-Fi-only run). The same output is saved as a text file, for sending it on without copying from the terminal: Files > iCloud Drive > Blink > `vpn-wifi-…`, `vpn-lte-…`, `vpn-hotspot-…`.
 
@@ -13,15 +17,19 @@ Run it once on Wi-Fi and once on LTE (on iPhone: Wi-Fi off, or Cellular Data off
 
 | Row | Probe | Needed by |
 |---|---|---|
-| connection | iOS: `ifconfig en0` / `pdp_ip0` (169.254 = no Wi-Fi IP, 192.0.0.x = IPv6-only with CLAT); macOS: route to 1.1.1.1 (follows VPN split routes), `networksetup` for Wi-Fi, `172.20.10.x` = iPhone hotspot | context |
-| VPN already on? | iOS: a `utun`/`ipsec`/`ppp` with IPv4 outside 192.0.0.x, or the public IPv4 of the default path in another /16 than a request bound to the link (`curl --interface en0` / `pdp_ip0`). On Wi-Fi with cellular up, a match with `pdp_ip0` means iOS sends the run over LTE (row `path`). macOS: the route to 1.1.1.1 goes via `utun`/`ppp`/`ipsec` | WARN = the rows describe the VPN, not the network |
-| TCP 443, HTTPS to 1.1.1.1 | `nc`, `curl` by IP | everything |
-| login page (Apple probe) | Apple captive probe; curl 6 = the name does not resolve, login page not tested | everything: no VPN before the portal login |
+| connection | iOS: `ifconfig en0` / `pdp_ip0` (169.254 = no Wi-Fi IP, 192.0.0.x = IPv6-only with CLAT); macOS: route to 1.1.1.1 (follows VPN split routes), `networksetup` for Wi-Fi, `172.20.10.x` = iPhone hotspot. No link found but the probes pass: WARN, printed after them | context |
+| DNS system resolver, dig @gateway, dig @1.1.1.1 | one name (example.com), 3 s cap each. System resolver: `curl` (getaddrinfo, what apps use). Gateway: macOS route gateway; Blink has no `route`, so `dig` with the configured server. Then `dig @1.1.1.1`. System FAIL with raw OK = WARN row "DNS reading": the break is in the system resolver path, not named further | everything: STUN, NTP, the HTTPS hosts and the ping name are resolved once each (`dig`, 3 s cap, first the configured server, then 1.1.1.1) and passed as addresses |
+| VPN already on? | iOS: a `utun`/`ipsec`/`ppp` with IPv4 outside 192.0.0.x and outside 100.64.0.0/10, or the public IPv4 of the default path in another /16 than a request bound to the link (`curl --interface en0` / `pdp_ip0`). A `utun` in 100.64.0.0/10 (Tailscale-like) alone is not a VPN finding. On Wi-Fi with cellular up, a match with `pdp_ip0` means iOS sends the run over LTE (row `path`). If the bound request itself fails, row `path` is WARN: "Wi-Fi itself has no internet, this run uses another path (LTE/VPN)". macOS: the route to 1.1.1.1 goes via `utun`/`ppp`/`ipsec` | WARN = the rows describe the VPN, not the network |
+| traffic exits at home WAN | only with `-v home_ip=`: public IPv4 of the run = home_ip. YES = Teleport carries the traffic (also when it runs on the router and the device sees no tunnel; then "VPN already on?" is INFO) | context: rows then describe the path through the tunnel |
+| TCP 443, HTTPS to 1.1.1.1 (control) | `nc`, `curl` by IP, `/cdn-cgi/trace`, with stage times (tcp, tls, total) | everything |
+| login page (Apple probe) | Apple captive probe; the name is resolved first, no address = login page not tested | everything: no VPN before the portal login |
 | UDP 3478, 19302 | STUN binding request to Cloudflare and Google over IPv4 (`nc -4`; `-6` on IPv6-only links), answer expected | WireGuard, Teleport, UniFi Identity, OpenVPN UDP, L2TP/IPsec |
-| UDP 123, 53 | NTP to time.apple.com; `id.server` CHAOS TXT to 1.1.1.1, which only Cloudflare answers with its site code (`HIJACK` = the network answers DNS itself; Control D is named when `verify.controld.com` comes back as `147.185.34.1`) | tells "UDP blocked" from "UDP only to DNS/NTP" |
+| UDP 123, 53 | NTP to time.apple.com; "UDP 53 (transport only)": `id.server` CHAOS TXT to 1.1.1.1, which only Cloudflare answers with its site code. It says that UDP 53 goes out and an answer comes back, nothing about the device. Someone else answering is `HIJACK` (Control D is named when `verify.controld.com` comes back as `147.185.34.1`), or INFO when the run exits at `home_ip` (the home resolver behind Teleport) | tells "UDP blocked" from "UDP only to DNS/NTP" |
 | IPv6 | `curl -6` to one.one.one.one; FAIL = the link has IPv6 but nothing answers (dropped, e.g. by a VPN without IPv6) | context (Teleport needs IPv6 on the gateway WAN in some cases: home side, not checked here) |
 | ping 1.1.1.1, 8.8.8.8, www.microsoft.com | `ping -c 2` to each: the targets of a UniFi Travel Router's internet check | Teleport and WireGuard on a UTR (firmware 6.6.117+, [teleport.md](teleport.md) H7) |
-| HTTPS unifi.ui.com, api.ui.com | `curl`, certificate checked | Teleport (cloud brokering) |
+| HTTPS unifi.ui.com, api.ui.com | `curl`, certificate checked, stage times (dns from `dig`, tcp, tls, total), up to 3 tries per host | Teleport (cloud brokering) |
+| HTTPS www.theverge.com, controlplane.tailscale.com | same; big TLS handshakes, next to the control (1.1.1.1) they tell an MTU/MSS hole from a host that is down. TCP connects and TLS hangs (curl 28) = `HANG`, WARN row "TLS hangs after TCP connect": path MTU/MSS suspect, not "unreachable" | context ([teleport.md](teleport.md) F1) |
+| DF ping ladder | only macOS, only with `-v ladder=1`: `ping -D -s` from the Wi-Fi MTU down to 1280, after a plain ping (no reply = "ICMP filtered, ladder skipped"). "Message too long" or "frag needed" = the kernel or the path reports its MTU (PMTUD works). Silence at sizes nothing reported on = black hole suspect | MTU hole between the uplink and the tunnel |
 | TCP server:port | `nc -z`, only with `-v server=` | OpenVPN over TCP |
 
 ## Verdict
@@ -38,7 +46,9 @@ Inferred from the rows, not measured on the VPN itself. UniFi Identity's One-Cli
 | TLS to the UniFi cloud intercepted | NO (likely) | not affected | UNLIKELY | not affected |
 | STUN names do not resolve / request files missing | UNKNOWN (fix DNS / copy files) | UNKNOWN | depends on TCP | UNKNOWN |
 
-One more line, for Teleport or WireGuard on a UniFi Travel Router: LIKELY NO on firmware 6.6.117+ when none of the three ping targets answers (the UTR then shows "No Internet" and its Teleport and WireGuard clients wait for that check; its OpenVPN client does not), "not tested" when a VPN is on or the link has no IPv4.
+One more line, for Teleport or WireGuard on a UniFi Travel Router: LIKELY NO on firmware 6.6.117+ when none of the three ping targets answers (the UTR then shows "No Internet" and its Teleport and WireGuard clients wait for that check; its OpenVPN client does not), "not tested" when a VPN is on, the run exits at `home_ip` (the pings went through Teleport) or the link has no IPv4.
+
+No verdict rests on one failure: each HTTPS host gets 3 tries, and the verdict names the stage (TLS hangs after TCP / no TCP / DNS / certificate).
 
 POSSIBLE, not LIKELY, for your own WireGuard/OpenVPN port: networks that open only video-call ports (3478, 19302) pass STUN and still drop 51820 or 1194. The final word is the VPN app on the same connection. If the app fails while the rows say LIKELY, the cause is not this network: server side, account, binding, firmware.
 
@@ -60,6 +70,12 @@ POSSIBLE, not LIKELY, for your own WireGuard/OpenVPN port: networks that open on
 | `curl --interface en0` / `pdp_ip0` in Blink binds to the link and gets around a normal full-tunnel VPN | HYPOTHESIS: by xnu and curl source; not yet run on an iPhone, and a VPN with enforced routes defeats it. On failure the row stays as before | |
 | A UniFi Travel Router decides "Internet" by ping to 1.1.1.1, 8.8.8.8 or www.microsoft.com, and from 6.6.117 its Teleport client waits for that check | CONFIRMED by static analysis of firmware 6.6.115, 6.6.117, 6.6.118, 6.6.122 (nothing run); that it is the cause on a given uplink: LIKELY until the app shows "Waiting for WAN to become reachable" | [teleport.md](teleport.md) H7 |
 
+| Tailscale's `utun` (100.64.0.0/10) is not a full-tunnel VPN by itself | HYPOTHESIS: by the address range (the user's Mac runs Tailscale; no run compared the two). The script now says "VPN" for such a `utun` only when the egress differs from the one bound to the link | [teleport.md](teleport.md) |
+| A router-level Teleport leaves no `utun` on the iPhone: the old run printed "VPN: none seen" while the traffic exited at the home WAN | CONFIRMED on an iPhone 2026-10-21 07:51 PDT (xfinitywifi, UTR with Teleport: exit 71.231.163.56) | user report; the log is not in the repo |
+| A broken system resolver costs 30 s per name (so per row that resolves a name) | CONFIRMED on that run (iPhone, 07:51 PDT); hence the 3 s cap and one lookup per name | user report |
+| `ping -D` "Message too long" is the local kernel refusing a size it learned from ICMP (PMTUD works); a black hole is silent loss | CONFIRMED on a Mac 2026-10-21: 1372-byte payload refused locally, 1272 passes, path MTU through Teleport between 1300 and 1400. Whether such a path also hangs TLS: see [teleport.md](teleport.md) F1 and the open question next to it | user report |
+| Blink's `dig` takes `+noall +answer +stats +time=3 +tries=1`, `curl` takes `--resolve` (also `[IPv6]`) and `--interface`, `ping` takes `-D` | HYPOTHESIS: standard options, nothing run in Blink yet. A refused `--interface` (curl 2 or 45) is reported as INFO; a refused `dig` option shows as DNS FAIL | |
+
 ## Limits
 
 - UDP to your own server's port cannot be confirmed from the phone: WireGuard and most VPN servers stay silent to unknown packets. For that, watch the server side (`scripts/teleport-cgm.sh capture` on a UniFi gateway).
@@ -67,4 +83,6 @@ POSSIBLE, not LIKELY, for your own WireGuard/OpenVPN port: networks that open on
 - UDP probes go over IPv4 (IPv6 on IPv6-only links); IPv6 is otherwise checked over HTTPS only.
 - Blink's awk aborts (`towc: multibyte conversion failure`) when a regex meets bytes that are not valid UTF-8, and UDP replies and web pages contain such bytes. Replies are therefore tested with `index()` and `==` only (reproduced with a native build of Blink's awk: the first version of this script crashed on a real NTP reply, this one does not).
 - First iPhone run 2026-10-20: the LTE screen output stopped at the IPv6 row, but the saved log has every row and the verdict, so the script finished. When the screen looks cut off, the log is the result.
+- The names are resolved with `dig`, not the system resolver, so a host can resolve here and still fail in an app; the "DNS system resolver" row is the only one that uses `getaddrinfo`. On Blink the gateway row is the configured server (no `route`); if `dig` prints no `;; SERVER:` line, the row names none.
+- DNS rows and the DF ladder were run with fake commands only (macOS and Blink layouts, dead resolver, home exit, Tailscale `utun`, MTU hang, ICMP filtered; identical output on mawk and nawk, 2026-10-22). Not run on an iPhone or a Mac.
 - Fake commands: binary STUN/NTP replies and a Latin-1 portal page, 152 platform/network/argument combinations in a UTF-8 locale, identical output on Blink's awk build, mawk and nawk. Not run on an iPhone or a Mac yet.
